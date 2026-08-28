@@ -1,9 +1,9 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
 
 import '../models/product.dart';
 import '../models/transaction.dart';
@@ -11,7 +11,9 @@ import '../services/product_service.dart';
 import '../services/transaction_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/buttons.dart';
+import '../widgets/pdf_preview_screen.dart';
 import 'dialogs_screen/add_transaction_screen.dart';
+import 'transaction_receipt_screen.dart';
 
 String _formatNum(num? val) {
   if (val == null) return '';
@@ -36,8 +38,10 @@ class _LedgerEntry {
     required this.balance,
   });
 
-  String get formattedReceive => receiveQty != null ? _formatNum(receiveQty) : '';
-  String get formattedRelease => releaseQty != null ? _formatNum(releaseQty) : '';
+  String get formattedReceive =>
+      receiveQty != null ? _formatNum(receiveQty) : '';
+  String get formattedRelease =>
+      releaseQty != null ? _formatNum(releaseQty) : '';
   String get formattedBalance => _formatNum(balance);
 }
 
@@ -109,7 +113,8 @@ class _ProductLedgerScreenState extends State<ProductLedgerScreen> {
 
       // Calculate total net change across all recorded transactions
       double totalNetChange = 0.0;
-      final List<({Transaction txn, double qty, bool isReceive, double delta})> deltas = [];
+      final List<({Transaction txn, double qty, bool isReceive, double delta})>
+          deltas = [];
 
       for (final t in txns) {
         double itemQty = 0.0;
@@ -185,7 +190,29 @@ class _ProductLedgerScreenState extends State<ProductLedgerScreen> {
     }
   }
 
-  Future<void> _exportPdf() async {
+  Future<void> _openTransactionReceipt(Transaction txn) async {
+    try {
+      final fullTxn = txn.id != null
+          ? await TransactionService.instance.getById(txn.id!)
+          : txn;
+      if (!mounted) return;
+      await TransactionReceiptScreen.navigateTo(context, fullTxn);
+      if (mounted) {
+        _loadLedger();
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to load transaction details: $e'),
+          backgroundColor: AppColors.danger,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<Uint8List> _buildPdfBytes(PdfPageFormat format) async {
     final pdf = pw.Document();
     final generatedAtStr =
         DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now());
@@ -306,7 +333,13 @@ class _ProductLedgerScreenState extends State<ProductLedgerScreen> {
               headers: headers,
               data: dataRows.isEmpty
                   ? [
-                      ['No transactions recorded', '-', '-', '-', '${_product.quantity}']
+                      [
+                        'No transactions recorded',
+                        '-',
+                        '-',
+                        '-',
+                        '${_product.quantity}'
+                      ]
                     ]
                   : dataRows,
               border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
@@ -323,9 +356,15 @@ class _ProductLedgerScreenState extends State<ProductLedgerScreen> {
       ),
     );
 
-    await Printing.layoutPdf(
-      onLayout: (PdfPageFormat format) async => pdf.save(),
-      name: 'StockCard_${_product.productName.replaceAll(" ", "_")}.pdf',
+    return pdf.save();
+  }
+
+  Future<void> _exportPdf() async {
+    await PdfPreviewScreen.navigateTo(
+      context,
+      title: 'Stock Card — ${_product.productName}',
+      buildPdf: _buildPdfBytes,
+      fileName: 'StockCard_${_product.productName.replaceAll(" ", "_")}.pdf',
     );
   }
 
@@ -394,7 +433,8 @@ class _ProductLedgerScreenState extends State<ProductLedgerScreen> {
                                     border: Border.all(color: AppColors.border),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.black.withValues(alpha: 0.03),
+                                        color: Colors.black
+                                            .withValues(alpha: 0.03),
                                         blurRadius: 10,
                                         offset: const Offset(0, 4),
                                       ),
@@ -402,44 +442,62 @@ class _ProductLedgerScreenState extends State<ProductLedgerScreen> {
                                   ),
                                   child: compact
                                       ? Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
                                           children: [
                                             Text(
-                                              _product.productName.toUpperCase(),
+                                              _product.productName
+                                                  .toUpperCase(),
                                               style: AppTextStyles.h2.copyWith(
                                                   fontSize: 18,
                                                   letterSpacing: 0.5),
                                             ),
                                             const SizedBox(height: 6),
                                             Row(
-                                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment
+                                                      .spaceBetween,
                                               children: [
                                                 Text(
                                                   'Unit: ${_product.unit}  •  ${_entries.length} moves',
-                                                  style: AppTextStyles.caption.copyWith(
-                                                      color: AppColors.textSecondary),
+                                                  style: AppTextStyles.caption
+                                                      .copyWith(
+                                                          color: AppColors
+                                                              .textSecondary),
                                                 ),
                                                 Container(
-                                                  padding: const EdgeInsets.symmetric(
-                                                      horizontal: 12, vertical: 6),
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                      horizontal: 12,
+                                                      vertical: 6),
                                                   decoration: BoxDecoration(
-                                                    color: AppColors.primarySoft,
-                                                    borderRadius: BorderRadius.circular(8),
+                                                    color:
+                                                        AppColors.primarySoft,
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            8),
                                                   ),
                                                   child: Row(
                                                     children: [
                                                       Text(
                                                         'STOCK: ',
-                                                        style: AppTextStyles.caption.copyWith(
-                                                            color: AppColors.primary,
-                                                            fontWeight: FontWeight.bold,
-                                                            fontSize: 10),
+                                                        style: AppTextStyles
+                                                            .caption
+                                                            .copyWith(
+                                                                color: AppColors
+                                                                    .primary,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .bold,
+                                                                fontSize: 10),
                                                       ),
                                                       Text(
                                                         '${_product.quantity}',
-                                                        style: AppTextStyles.h3.copyWith(
-                                                            color: AppColors.primary,
-                                                            fontSize: 18),
+                                                        style: AppTextStyles.h3
+                                                            .copyWith(
+                                                                color: AppColors
+                                                                    .primary,
+                                                                fontSize: 18),
                                                       ),
                                                     ],
                                                   ),
@@ -451,7 +509,8 @@ class _ProductLedgerScreenState extends State<ProductLedgerScreen> {
                                       : Row(
                                           mainAxisAlignment:
                                               MainAxisAlignment.spaceBetween,
-                                          crossAxisAlignment: CrossAxisAlignment.center,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.center,
                                           children: [
                                             Expanded(
                                               child: Column(
@@ -459,30 +518,38 @@ class _ProductLedgerScreenState extends State<ProductLedgerScreen> {
                                                     CrossAxisAlignment.start,
                                                 children: [
                                                   Text(
-                                                    _product.productName.toUpperCase(),
-                                                    style: AppTextStyles.h1.copyWith(
-                                                        fontSize: 22,
-                                                        letterSpacing: 0.5),
+                                                    _product.productName
+                                                        .toUpperCase(),
+                                                    style: AppTextStyles.h1
+                                                        .copyWith(
+                                                            fontSize: 22,
+                                                            letterSpacing: 0.5),
                                                   ),
                                                   const SizedBox(height: 4),
                                                   Text(
                                                     'Unit: ${_product.unit}  •  ${_entries.length} recorded movements',
-                                                    style: AppTextStyles.caption.copyWith(
-                                                        color: AppColors.textSecondary),
+                                                    style: AppTextStyles.caption
+                                                        .copyWith(
+                                                            color: AppColors
+                                                                .textSecondary),
                                                   ),
                                                 ],
                                               ),
                                             ),
                                             const SizedBox(width: 16),
                                             Container(
-                                              padding: const EdgeInsets.symmetric(
-                                                  horizontal: 20, vertical: 12),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 20,
+                                                      vertical: 12),
                                               decoration: BoxDecoration(
                                                 color: AppColors.primarySoft,
-                                                borderRadius: BorderRadius.circular(12),
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
                                                 border: Border.all(
                                                     color: AppColors.primary
-                                                        .withValues(alpha: 0.2)),
+                                                        .withValues(
+                                                            alpha: 0.2)),
                                               ),
                                               child: Column(
                                                 crossAxisAlignment:
@@ -490,17 +557,23 @@ class _ProductLedgerScreenState extends State<ProductLedgerScreen> {
                                                 children: [
                                                   Text(
                                                     'TOTAL STOCK',
-                                                    style: AppTextStyles.label.copyWith(
-                                                        color: AppColors.primary,
-                                                        fontSize: 11,
-                                                        fontWeight: FontWeight.bold),
+                                                    style: AppTextStyles.label
+                                                        .copyWith(
+                                                            color: AppColors
+                                                                .primary,
+                                                            fontSize: 11,
+                                                            fontWeight:
+                                                                FontWeight
+                                                                    .bold),
                                                   ),
                                                   const SizedBox(height: 2),
                                                   Text(
                                                     '${_product.quantity}',
-                                                    style: AppTextStyles.h1.copyWith(
-                                                        color: AppColors.primary,
-                                                        fontSize: 28),
+                                                    style: AppTextStyles.h1
+                                                        .copyWith(
+                                                            color: AppColors
+                                                                .primary,
+                                                            fontSize: 28),
                                                   ),
                                                 ],
                                               ),
@@ -519,7 +592,8 @@ class _ProductLedgerScreenState extends State<ProductLedgerScreen> {
                                     border: Border.all(color: AppColors.border),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.black.withValues(alpha: 0.03),
+                                        color: Colors.black
+                                            .withValues(alpha: 0.03),
                                         blurRadius: 10,
                                         offset: const Offset(0, 4),
                                       ),
@@ -550,7 +624,8 @@ class _ProductLedgerScreenState extends State<ProductLedgerScreen> {
                                                     textAlign: TextAlign.center,
                                                     style: AppTextStyles.label
                                                         .copyWith(
-                                                            color: AppColors.success)),
+                                                            color: AppColors
+                                                                .success)),
                                               ),
                                               SizedBox(
                                                 width: 90,
@@ -558,7 +633,8 @@ class _ProductLedgerScreenState extends State<ProductLedgerScreen> {
                                                     textAlign: TextAlign.center,
                                                     style: AppTextStyles.label
                                                         .copyWith(
-                                                            color: AppColors.danger)),
+                                                            color: AppColors
+                                                                .danger)),
                                               ),
                                               SizedBox(
                                                 width: 90,
@@ -580,8 +656,10 @@ class _ProductLedgerScreenState extends State<ProductLedgerScreen> {
                                           child: Center(
                                             child: Text(
                                               'No transaction history for this item yet.',
-                                              style: AppTextStyles.body.copyWith(
-                                                  color: AppColors.textSecondary),
+                                              style: AppTextStyles.body
+                                                  .copyWith(
+                                                      color: AppColors
+                                                          .textSecondary),
                                             ),
                                           ),
                                         )
@@ -594,178 +672,256 @@ class _ProductLedgerScreenState extends State<ProductLedgerScreen> {
                                           if (compact) {
                                             return Column(
                                               children: [
-                                                Padding(
-                                                  padding: const EdgeInsets.symmetric(
-                                                      horizontal: 16, vertical: 12),
-                                                  child: Column(
-                                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                                    children: [
-                                                      Row(
-                                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                                        children: [
-                                                          Text(
-                                                            entry.billNo,
-                                                            style: AppTextStyles.bodyMedium
-                                                                .copyWith(fontWeight: FontWeight.w600),
-                                                          ),
-                                                          if (entry.receiveQty != null)
-                                                            Text(
-                                                              '+${entry.receiveQty}',
-                                                              style: AppTextStyles.bodyMedium.copyWith(
-                                                                  color: AppColors.success,
-                                                                  fontWeight: FontWeight.bold),
-                                                            )
-                                                          else if (entry.releaseQty != null)
-                                                            Text(
-                                                              '-${entry.releaseQty}',
-                                                              style: AppTextStyles.bodyMedium.copyWith(
-                                                                  color: AppColors.danger,
-                                                                  fontWeight: FontWeight.bold),
+                                                InkWell(
+                                                  onTap: () => _openTransactionReceipt(entry.transaction),
+                                                  child: Padding(
+                                                    padding: const EdgeInsets
+                                                        .symmetric(
+                                                        horizontal: 16,
+                                                        vertical: 12),
+                                                    child: Column(
+                                                      crossAxisAlignment:
+                                                          CrossAxisAlignment
+                                                              .start,
+                                                      children: [
+                                                        Row(
+                                                          mainAxisAlignment:
+                                                              MainAxisAlignment
+                                                                  .spaceBetween,
+                                                          children: [
+                                                            Row(
+                                                              children: [
+                                                                Text(
+                                                                  entry.billNo,
+                                                                  style: AppTextStyles
+                                                                      .bodyMedium
+                                                                      .copyWith(
+                                                                          fontWeight:
+                                                                              FontWeight
+                                                                                  .w600,
+                                                                          color: AppColors
+                                                                              .primary),
+                                                                ),
+                                                                const SizedBox(width: 4),
+                                                                const Icon(
+                                                                  Icons.chevron_right_rounded,
+                                                                  size: 16,
+                                                                  color: AppColors.textMuted,
+                                                                ),
+                                                              ],
                                                             ),
-                                                        ],
-                                                      ),
-                                                      const SizedBox(height: 4),
-                                                      Row(
-                                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                                        children: [
-                                                          Text(
-                                                            dateStr,
-                                                            style: AppTextStyles.caption.copyWith(
-                                                                fontSize: 12,
-                                                                color: AppColors.textSecondary),
-                                                          ),
-                                                          Text(
-                                                            'Bal: ${entry.balance}',
-                                                            style: AppTextStyles.caption.copyWith(
-                                                                fontWeight: FontWeight.w600,
-                                                                color: AppColors.textPrimary),
-                                                          ),
-                                                        ],
-                                                      ),
-                                                    ],
+                                                            if (entry
+                                                                    .receiveQty !=
+                                                                null)
+                                                              Text(
+                                                                '+${entry.receiveQty}',
+                                                                style: AppTextStyles
+                                                                    .bodyMedium
+                                                                    .copyWith(
+                                                                        color: AppColors
+                                                                            .success,
+                                                                        fontWeight:
+                                                                            FontWeight
+                                                                                .bold),
+                                                              )
+                                                            else if (entry
+                                                                    .releaseQty !=
+                                                                null)
+                                                              Text(
+                                                                '-${entry.releaseQty}',
+                                                                style: AppTextStyles
+                                                                    .bodyMedium
+                                                                    .copyWith(
+                                                                        color: AppColors
+                                                                            .danger,
+                                                                        fontWeight:
+                                                                            FontWeight
+                                                                                .bold),
+                                                              ),
+                                                          ],
+                                                        ),
+                                                        const SizedBox(height: 4),
+                                                        Row(
+                                                          mainAxisAlignment:
+                                                              MainAxisAlignment
+                                                                  .spaceBetween,
+                                                          children: [
+                                                            Text(
+                                                              dateStr,
+                                                              style: AppTextStyles
+                                                                  .caption
+                                                                  .copyWith(
+                                                                      fontSize:
+                                                                          12,
+                                                                      color: AppColors
+                                                                          .textSecondary),
+                                                            ),
+                                                            Text(
+                                                              'Bal: ${entry.balance}',
+                                                              style: AppTextStyles
+                                                                  .caption
+                                                                  .copyWith(
+                                                                      fontWeight:
+                                                                          FontWeight
+                                                                              .w600,
+                                                                      color: AppColors
+                                                                          .textPrimary),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      ],
+                                                    ),
                                                   ),
                                                 ),
-                                                const Divider(height: 1, color: AppColors.border),
+                                                const Divider(
+                                                    height: 1,
+                                                    color: AppColors.border),
                                               ],
                                             );
                                           }
 
                                           return Column(
                                             children: [
-                                              Padding(
-                                                padding: const EdgeInsets.symmetric(
-                                                    horizontal: 20, vertical: 14),
-                                                child: Row(
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.center,
-                                                  children: [
-                                                    // Description (Bill No. + Date subtext)
-                                                    Expanded(
-                                                      flex: 5,
-                                                      child: Column(
-                                                        crossAxisAlignment:
-                                                            CrossAxisAlignment.start,
-                                                        children: [
-                                                          Text(
-                                                            entry.billNo,
-                                                            style: AppTextStyles
-                                                                .bodyMedium
-                                                                .copyWith(
-                                                                    fontWeight:
-                                                                        FontWeight
-                                                                            .w600),
-                                                          ),
-                                                          const SizedBox(height: 2),
-                                                          Text(
-                                                            dateStr,
-                                                            style: AppTextStyles
-                                                                .caption
-                                                                .copyWith(
-                                                                    fontSize: 12,
-                                                                    color: AppColors
-                                                                        .textSecondary),
-                                                          ),
-                                                        ],
+                                              InkWell(
+                                                onTap: () => _openTransactionReceipt(entry.transaction),
+                                                child: Padding(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                          horizontal: 20,
+                                                          vertical: 14),
+                                                  child: Row(
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment.center,
+                                                    children: [
+                                                      // Description (Bill No. + Date subtext)
+                                                      Expanded(
+                                                        flex: 5,
+                                                        child: Column(
+                                                          crossAxisAlignment:
+                                                              CrossAxisAlignment
+                                                                  .start,
+                                                          children: [
+                                                            Row(
+                                                              children: [
+                                                                Text(
+                                                                  entry.billNo,
+                                                                  style: AppTextStyles
+                                                                      .bodyMedium
+                                                                      .copyWith(
+                                                                          fontWeight:
+                                                                              FontWeight
+                                                                                  .w600,
+                                                                          color: AppColors
+                                                                              .primary),
+                                                                ),
+                                                                const SizedBox(width: 4),
+                                                                const Icon(
+                                                                  Icons.arrow_outward_rounded,
+                                                                  size: 14,
+                                                                  color: AppColors.textMuted,
+                                                                ),
+                                                              ],
+                                                            ),
+                                                            const SizedBox(
+                                                                height: 2),
+                                                            Text(
+                                                              dateStr,
+                                                              style: AppTextStyles
+                                                                  .caption
+                                                                  .copyWith(
+                                                                      fontSize:
+                                                                          12,
+                                                                      color: AppColors
+                                                                          .textSecondary),
+                                                            ),
+                                                          ],
+                                                        ),
                                                       ),
-                                                    ),
 
-                                                    // Receive Column (+ sign with green)
-                                                    SizedBox(
-                                                      width: 90,
-                                                  child: entry.receiveQty !=
-                                                          null
-                                                      ? Text(
-                                                          '+${entry.formattedReceive}',
+                                                      // Receive Column (+ sign with green)
+                                                      SizedBox(
+                                                        width: 90,
+                                                        child:
+                                                            entry.receiveQty !=
+                                                                    null
+                                                                ? Text(
+                                                                    '+${entry.formattedReceive}',
+                                                                    textAlign:
+                                                                        TextAlign
+                                                                            .center,
+                                                                    style: AppTextStyles
+                                                                        .bodyMedium
+                                                                        .copyWith(
+                                                                            color: AppColors
+                                                                                .success,
+                                                                            fontWeight:
+                                                                                FontWeight.bold),
+                                                                  )
+                                                                : const SizedBox
+                                                                    .shrink(),
+                                                      ),
+
+                                                      // Release Column (- sign with red)
+                                                      SizedBox(
+                                                        width: 90,
+                                                        child:
+                                                            entry.releaseQty !=
+                                                                    null
+                                                                ? Text(
+                                                                    '-${entry.formattedRelease}',
+                                                                    textAlign:
+                                                                        TextAlign
+                                                                            .center,
+                                                                    style: AppTextStyles
+                                                                        .bodyMedium
+                                                                        .copyWith(
+                                                                            color: AppColors
+                                                                                .danger,
+                                                                            fontWeight:
+                                                                                FontWeight.bold),
+                                                                  )
+                                                                : const SizedBox
+                                                                    .shrink(),
+                                                      ),
+
+                                                      // Balance Column
+                                                      SizedBox(
+                                                        width: 90,
+                                                        child: Text(
+                                                          entry.formattedBalance,
                                                           textAlign:
-                                                              TextAlign.center,
+                                                              TextAlign.right,
                                                           style: AppTextStyles
                                                               .bodyMedium
                                                               .copyWith(
-                                                                  color: AppColors
-                                                                      .success,
                                                                   fontWeight:
                                                                       FontWeight
-                                                                          .bold),
-                                                        )
-                                                      : const SizedBox.shrink(),
-                                                ),
-
-                                                // Release Column (- sign with red)
-                                                SizedBox(
-                                                  width: 90,
-                                                  child: entry.releaseQty !=
-                                                          null
-                                                      ? Text(
-                                                          '-${entry.formattedRelease}',
-                                                          textAlign:
-                                                              TextAlign.center,
-                                                          style: AppTextStyles
-                                                              .bodyMedium
-                                                              .copyWith(
+                                                                          .bold,
                                                                   color: AppColors
-                                                                      .danger,
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .bold),
-                                                        )
-                                                      : const SizedBox.shrink(),
-                                                ),
-
-                                                // Balance Column
-                                                SizedBox(
-                                                  width: 90,
-                                                  child: Text(
-                                                    entry.formattedBalance,
-                                                    textAlign: TextAlign.right,
-                                                    style: AppTextStyles
-                                                        .bodyMedium
-                                                        .copyWith(
-                                                            fontWeight:
-                                                                FontWeight.bold,
-                                                            color: AppColors
-                                                                .textPrimary),
+                                                                      .textPrimary),
+                                                        ),
+                                                      ),
+                                                    ],
                                                   ),
                                                 ),
-                                              ],
-                                            ),
-                                          ),
-                                          const Divider(
-                                              height: 1,
-                                              color: AppColors.border),
-                                        ],
-                                      );
-                                    }),
-                                ],
-                              ),
+                                              ),
+                                              const Divider(
+                                                  height: 1,
+                                                  color: AppColors.border),
+                                            ],
+                                          );
+                                        }),
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ),
-                          ],
+                          ),
                         ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
+                      );
+                    },
+                  ),
+                ),
       bottomNavigationBar: SafeArea(
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
@@ -787,7 +943,7 @@ class _ProductLedgerScreenState extends State<ProductLedgerScreen> {
                   height: 48,
                   child: ElevatedButton.icon(
                     onPressed: _onReceive,
-                    icon: const Icon(Icons.add_circle_outline_rounded,
+                    icon: const Icon(Icons.call_received_rounded,
                         color: Colors.white, size: 20),
                     label: Text(
                       'Receive',
@@ -811,7 +967,7 @@ class _ProductLedgerScreenState extends State<ProductLedgerScreen> {
                   height: 48,
                   child: ElevatedButton.icon(
                     onPressed: _onRelease,
-                    icon: const Icon(Icons.remove_circle_outline_rounded,
+                    icon: const Icon(Icons.arrow_upward_rounded,
                         color: Colors.white, size: 20),
                     label: Text(
                       'Release',

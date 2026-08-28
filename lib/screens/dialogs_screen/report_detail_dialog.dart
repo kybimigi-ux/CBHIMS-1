@@ -63,7 +63,7 @@ class _ReportDetailDialogState extends State<ReportDetailDialog> {
   String? _error;
 
   final TextEditingController _itemSearchController = TextEditingController();
-  final List<String> _searchKeywords = [];
+  final Set<int> _selectedProductIds = <int>{};
 
   final DateFormat _dateFormat = DateFormat('MMM dd, yyyy');
 
@@ -77,6 +77,152 @@ class _ReportDetailDialogState extends State<ReportDetailDialog> {
   void dispose() {
     _itemSearchController.dispose();
     super.dispose();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Brand & Keyword-Aware Grouping & Natural Sorting
+  // ---------------------------------------------------------------------------
+  static final Set<String> _ignoredTokens = {
+    'and', 'or', 'with', 'the', 'for', 'in', 'of', 'no', 'x',
+    'mm', 'cm', 'm', 'inch', 'kg', 'g', 'lbs', 'pc', 'pcs',
+    'box', 'roll', 'bag', 'bundle', 'set', 'meter', 'feet', 'ft',
+    'heavy', 'duty', 'standard', 'original', 'class', 'type',
+  };
+
+  static final Set<String> _genericCategoryTokens = {
+    'pipe', 'pipes', 'fitting', 'fittings', 'elbow', 'tee', 'coupling',
+    'adapter', 'reducer', 'valve', 'valves', 'cement', 'steel', 'bar',
+    'bars', 'wire', 'wires', 'nail', 'nails', 'screw', 'screws', 'paint',
+    'paints', 'board', 'boards', 'plywood', 'hose', 'tape', 'lock', 'locks',
+    'faucet', 'faucets', 'switch', 'switches', 'plate', 'plates', 'tube',
+    'tubes', 'rod', 'rods', 'sheet', 'sheets', 'tile', 'tiles', 'sand',
+    'gravel', 'lumber', 'wood', 'bulb', 'light', 'handle', 'hinge', 'hinges',
+  };
+
+  static void _sortProductsByBrandAndName(List<Product> list) {
+    if (list.length <= 1) return;
+
+    // 1. Identify common words across the list
+    final Map<String, int> wordCounts = {};
+    for (final p in list) {
+      final seenInProduct = <String>{};
+      final tokens = p.productName
+          .replaceAll(RegExp(r'[^a-zA-Z0-9\s]'), ' ')
+          .split(RegExp(r'\s+'));
+
+      for (final raw in tokens) {
+        final token = raw.trim().toLowerCase();
+        if (token.length < 3 ||
+            int.tryParse(token) != null ||
+            _ignoredTokens.contains(token)) {
+          continue;
+        }
+        seenInProduct.add(token);
+      }
+
+      for (final t in seenInProduct) {
+        wordCounts[t] = (wordCounts[t] ?? 0) + 1;
+      }
+    }
+
+    final brandKeywords = <String>{};
+    final categoryKeywords = <String>{};
+
+    wordCounts.forEach((word, count) {
+      if (count >= 2) {
+        if (_genericCategoryTokens.contains(word)) {
+          categoryKeywords.add(word);
+        } else {
+          brandKeywords.add(word);
+        }
+      }
+    });
+
+    // 2. Map each product to its cluster key
+    final Map<Product, String> groupKeyMap = {};
+    for (final p in list) {
+      final tokens = p.productName
+          .replaceAll(RegExp(r'[^a-zA-Z0-9\s]'), ' ')
+          .split(RegExp(r'\s+'))
+          .map((t) => t.trim().toLowerCase())
+          .where((t) => t.isNotEmpty)
+          .toList();
+
+      String? key;
+      // High priority: brand keyword appearing in multiple products (e.g. Atlanta, Mabuhay)
+      for (final token in tokens) {
+        if (brandKeywords.contains(token)) {
+          key = token;
+          break;
+        }
+      }
+
+      // Medium priority: category keyword
+      if (key == null) {
+        for (final token in tokens) {
+          if (categoryKeywords.contains(token)) {
+            key = token;
+            break;
+          }
+        }
+      }
+
+      // Low priority: first significant word
+      if (key == null) {
+        for (final token in tokens) {
+          if (token.length >= 3 &&
+              int.tryParse(token) == null &&
+              !_ignoredTokens.contains(token)) {
+            key = token;
+            break;
+          }
+        }
+      }
+
+      groupKeyMap[p] = key ?? (tokens.isNotEmpty ? tokens.first : p.productName.toLowerCase().trim());
+    }
+
+    // 3. Sort by group key, then by full product name naturally
+    list.sort((a, b) {
+      final keyA = groupKeyMap[a]!;
+      final keyB = groupKeyMap[b]!;
+
+      final keyComp = _naturalCompare(keyA, keyB);
+      if (keyComp != 0) return keyComp;
+
+      return _naturalCompare(a.productName, b.productName);
+    });
+  }
+
+  static int _naturalCompare(String a, String b) {
+    final regExp = RegExp(r'(\d+)|(\D+)');
+    final matchesA = regExp
+        .allMatches(a.toLowerCase().trim())
+        .map((m) => m.group(0)!)
+        .toList();
+    final matchesB = regExp
+        .allMatches(b.toLowerCase().trim())
+        .map((m) => m.group(0)!)
+        .toList();
+
+    final minLen =
+        matchesA.length < matchesB.length ? matchesA.length : matchesB.length;
+    for (int i = 0; i < minLen; i++) {
+      final partA = matchesA[i];
+      final partB = matchesB[i];
+
+      final numA = int.tryParse(partA);
+      final numB = int.tryParse(partB);
+
+      if (numA != null && numB != null) {
+        final diff = numA.compareTo(numB);
+        if (diff != 0) return diff;
+      } else {
+        final diff = partA.compareTo(partB);
+        if (diff != 0) return diff;
+      }
+    }
+    return matchesA.length.compareTo(matchesB.length);
   }
 
   Future<void> _loadReportData() async {
@@ -95,6 +241,7 @@ class _ReportDetailDialogState extends State<ReportDetailDialog> {
         });
       } else {
         final products = await ProductService.instance.getAll();
+        _sortProductsByBrandAndName(products);
         if (!mounted) return;
         setState(() {
           _products = products;
@@ -134,54 +281,35 @@ class _ReportDetailDialogState extends State<ReportDetailDialog> {
     }
   }
 
-  void _addKeyword([String? text]) {
-    final query = (text ?? _itemSearchController.text).trim();
-    if (query.isEmpty) return;
-    if (!_searchKeywords.any((k) => k.toLowerCase() == query.toLowerCase())) {
-      setState(() {
-        _searchKeywords.add(query);
-        _itemSearchController.clear();
-      });
-    }
+  // Displayed products in specific items selector based on live search
+  List<Product> get _displayedSpecificItems {
+    final query = _itemSearchController.text.trim().toLowerCase();
+    final list = query.isEmpty
+        ? List<Product>.from(_products)
+        : _products
+            .where((p) => p.productName.toLowerCase().contains(query))
+            .toList();
+    _sortProductsByBrandAndName(list);
+    return list;
   }
 
-  void _removeKeyword(String kw) {
-    setState(() {
-      _searchKeywords.remove(kw);
-    });
-  }
-
-  void _clearAllKeywords() {
-    setState(() {
-      _searchKeywords.clear();
-      _itemSearchController.clear();
-    });
-  }
-
-  // Filter products or transactions by selected date range / status / search criteria
+  // Selected products for export/report
   List<Product> get _filteredProducts {
     if (widget.reportType == ReportType.lowStockSummary) {
-      return _products.where((p) => p.quantity <= 10).toList();
+      final list = _products.where((p) => p.quantity <= 10).toList();
+      _sortProductsByBrandAndName(list);
+      return list;
     }
     if (widget.reportType == ReportType.specificItems) {
-      final currentQuery = _itemSearchController.text.trim().toLowerCase();
-      if (_searchKeywords.isEmpty && currentQuery.isEmpty) {
-        return [];
-      }
-      return _products.where((p) {
-        final name = p.productName.toLowerCase();
-        if (currentQuery.isNotEmpty && name.contains(currentQuery)) {
-          return true;
-        }
-        for (final kw in _searchKeywords) {
-          if (name.contains(kw.toLowerCase())) {
-            return true;
-          }
-        }
-        return false;
-      }).toList();
+      final list = _products
+          .where((p) => p.id != null && _selectedProductIds.contains(p.id))
+          .toList();
+      _sortProductsByBrandAndName(list);
+      return list;
     }
-    return _products;
+    final list = List<Product>.from(_products);
+    _sortProductsByBrandAndName(list);
+    return list;
   }
 
   List<Transaction> get _filteredTransactions {
@@ -228,10 +356,36 @@ class _ReportDetailDialogState extends State<ReportDetailDialog> {
     }).toList();
   }
 
+  void _selectAllFiltered() {
+    setState(() {
+      for (final p in _displayedSpecificItems) {
+        if (p.id != null) {
+          _selectedProductIds.add(p.id!);
+        }
+      }
+    });
+  }
+
+  void _deselectAllFiltered() {
+    setState(() {
+      for (final p in _displayedSpecificItems) {
+        if (p.id != null) {
+          _selectedProductIds.remove(p.id);
+        }
+      }
+    });
+  }
+
+  void _clearAllSelections() {
+    setState(() {
+      _selectedProductIds.clear();
+    });
+  }
+
   // ---------------------------------------------------------------------------
-  // PDF Generation & Download
+  // PDF Document Builder
   // ---------------------------------------------------------------------------
-  Future<void> _exportPdf() async {
+  Future<Uint8List> _buildPdfBytes(PdfPageFormat format) async {
     final pdf = pw.Document();
 
     final dateRangeStr =
@@ -239,12 +393,10 @@ class _ReportDetailDialogState extends State<ReportDetailDialog> {
     final generatedAtStr =
         DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now());
 
-    final subtitleFilters = widget.reportType == ReportType.specificItems &&
-            _searchKeywords.isNotEmpty
-        ? 'Filtered Items: ${_searchKeywords.join(", ")}'
+    final subtitleFilters = widget.reportType == ReportType.specificItems
+        ? 'Specific Items Report (${_filteredProducts.length} selected items)'
         : 'Date Range: $dateRangeStr';
 
-    // Build headers and rows depending on report type
     final List<String> headers;
     final List<List<String>> dataRows;
 
@@ -271,7 +423,7 @@ class _ReportDetailDialogState extends State<ReportDetailDialog> {
         'Product Name',
         'Quantity',
         'Unit',
-        'Stock Status'
+        'Stock Status',
       ];
       dataRows = _filteredProducts.map((p) {
         final statusStr = p.quantity <= 0
@@ -288,7 +440,7 @@ class _ReportDetailDialogState extends State<ReportDetailDialog> {
 
     pdf.addPage(
       pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
+        pageFormat: format,
         margin: const pw.EdgeInsets.all(32),
         header: (pw.Context ctx) {
           return pw.Column(
@@ -355,9 +507,37 @@ class _ReportDetailDialogState extends State<ReportDetailDialog> {
       ),
     );
 
-    await Printing.layoutPdf(
-      onLayout: (PdfPageFormat format) async => pdf.save(),
-      name: '${widget.reportTitle.replaceAll(" ", "_")}.pdf',
+    return pdf.save();
+  }
+
+  // ---------------------------------------------------------------------------
+  // PDF Preview (zoomable) + Export
+  // ---------------------------------------------------------------------------
+  Future<void> _openPdfPreview() async {
+    if (widget.reportType == ReportType.specificItems &&
+        _selectedProductIds.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+              'Please check at least one product to generate the report.'),
+          backgroundColor: AppColors.danger,
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+      return;
+    }
+
+    if (!mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => _PdfPreviewScreen(
+          title: widget.reportTitle,
+          buildPdf: _buildPdfBytes,
+          fileName: '${widget.reportTitle.replaceAll(" ", "_")}.pdf',
+        ),
+      ),
     );
   }
 
@@ -365,13 +545,28 @@ class _ReportDetailDialogState extends State<ReportDetailDialog> {
   // CSV Generation & Export
   // ---------------------------------------------------------------------------
   Future<void> _exportCsv() async {
+    if (widget.reportType == ReportType.specificItems &&
+        _selectedProductIds.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+              'Please check at least one product to generate the report.'),
+          backgroundColor: AppColors.danger,
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+      return;
+    }
+
     final StringBuffer csvBuffer = StringBuffer();
 
     // Title & Date Header
     csvBuffer.writeln('"Celis Brothers Hardware - ${widget.reportTitle}"');
-    if (widget.reportType == ReportType.specificItems &&
-        _searchKeywords.isNotEmpty) {
-      csvBuffer.writeln('"Filtered Items: ${_searchKeywords.join(", ")}"');
+    if (widget.reportType == ReportType.specificItems) {
+      csvBuffer.writeln(
+          '"Specific Items Report - ${_filteredProducts.length} Selected Items"');
     } else {
       csvBuffer.writeln(
           '"Date Range: ${_dateFormat.format(_startDate)} to ${_dateFormat.format(_endDate)}"');
@@ -379,8 +574,7 @@ class _ReportDetailDialogState extends State<ReportDetailDialog> {
     csvBuffer.writeln();
 
     if (widget.reportType == ReportType.transactionMovement) {
-      csvBuffer.writeln(
-          '"Bill No.","Type","Total Items","Created By","Date"');
+      csvBuffer.writeln('"Bill No.","Type","Total Items","Created By","Date"');
       for (final row in _computedTransactionRows) {
         final t = row['transaction'] as Transaction;
         final dStr =
@@ -419,7 +613,9 @@ class _ReportDetailDialogState extends State<ReportDetailDialog> {
           : const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       child: Container(
         width: dialogWidth,
-        constraints: BoxConstraints(maxHeight: compact ? MediaQuery.of(context).size.height * 0.92 : 760),
+        constraints: BoxConstraints(
+            maxHeight:
+                compact ? MediaQuery.of(context).size.height * 0.92 : 760),
         decoration: BoxDecoration(
           color: AppColors.surface,
           borderRadius: BorderRadius.circular(compact ? 16 : 20),
@@ -454,7 +650,8 @@ class _ReportDetailDialogState extends State<ReportDetailDialog> {
 
   Widget _buildBrandedHeader(bool compact) {
     return Padding(
-      padding: EdgeInsets.fromLTRB(compact ? 16 : 28, compact ? 14 : 20, compact ? 12 : 20, compact ? 12 : 16),
+      padding: EdgeInsets.fromLTRB(compact ? 16 : 28, compact ? 14 : 20,
+          compact ? 12 : 20, compact ? 12 : 16),
       child: Row(
         children: [
           Container(
@@ -486,7 +683,8 @@ class _ReportDetailDialogState extends State<ReportDetailDialog> {
                     Expanded(
                       child: Text(
                         'Celis Brothers Hardware',
-                        style: AppTextStyles.h2.copyWith(fontSize: compact ? 16 : 20),
+                        style: AppTextStyles.h2
+                            .copyWith(fontSize: compact ? 16 : 20),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
@@ -510,8 +708,9 @@ class _ReportDetailDialogState extends State<ReportDetailDialog> {
                 ),
                 const SizedBox(height: 2),
                 Text(widget.reportTitle,
-                    style: AppTextStyles.bodyMedium
-                        .copyWith(color: AppColors.textSecondary, fontSize: compact ? 12 : 14)),
+                    style: AppTextStyles.bodyMedium.copyWith(
+                        color: AppColors.textSecondary,
+                        fontSize: compact ? 12 : 14)),
               ],
             ),
           ),
@@ -553,7 +752,8 @@ class _ReportDetailDialogState extends State<ReportDetailDialog> {
                   widget.reportType == ReportType.transactionMovement
                       ? '${_filteredTransactions.length} transactions'
                       : '${_filteredProducts.length} items',
-                  style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.bold),
+                  style: AppTextStyles.caption
+                      .copyWith(fontWeight: FontWeight.bold),
                 ),
               ],
             ),
@@ -562,7 +762,8 @@ class _ReportDetailDialogState extends State<ReportDetailDialog> {
               children: [
                 Expanded(
                   child: _dateButton(
-                      label: _dateFormat.format(_startDate), onTap: _selectStartDate),
+                      label: _dateFormat.format(_startDate),
+                      onTap: _selectStartDate),
                 ),
                 const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 6),
@@ -571,7 +772,8 @@ class _ReportDetailDialogState extends State<ReportDetailDialog> {
                 ),
                 Expanded(
                   child: _dateButton(
-                      label: _dateFormat.format(_endDate), onTap: _selectEndDate),
+                      label: _dateFormat.format(_endDate),
+                      onTap: _selectEndDate),
                 ),
               ],
             ),
@@ -613,6 +815,11 @@ class _ReportDetailDialogState extends State<ReportDetailDialog> {
   }
 
   Widget _buildSpecificItemFilter(bool compact) {
+    final displayed = _displayedSpecificItems;
+    final allFilteredSelected = displayed.isNotEmpty &&
+        displayed
+            .every((p) => p.id != null && _selectedProductIds.contains(p.id));
+
     if (compact) {
       return Container(
         padding: const EdgeInsets.all(14),
@@ -628,11 +835,10 @@ class _ReportDetailDialogState extends State<ReportDetailDialog> {
               child: TextField(
                 controller: _itemSearchController,
                 onChanged: (_) => setState(() {}),
-                onSubmitted: (val) => _addKeyword(val),
                 style: AppTextStyles.body
                     .copyWith(color: AppColors.textPrimary, fontSize: 13),
                 decoration: InputDecoration(
-                  hintText: 'Search product name or brand...',
+                  hintText: 'Search product name (e.g. Atlanta, Mabuhay)...',
                   hintStyle: AppTextStyles.body
                       .copyWith(color: AppColors.textMuted, fontSize: 12),
                   prefixIcon: const Icon(Icons.search_rounded,
@@ -648,8 +854,8 @@ class _ReportDetailDialogState extends State<ReportDetailDialog> {
                       : null,
                   filled: true,
                   fillColor: AppColors.surface,
-                  contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 8),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                     borderSide: const BorderSide(color: AppColors.border),
@@ -660,69 +866,89 @@ class _ReportDetailDialogState extends State<ReportDetailDialog> {
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(
-                        color: AppColors.primary, width: 1.5),
+                    borderSide:
+                        const BorderSide(color: AppColors.primary, width: 1.5),
                   ),
                 ),
               ),
             ),
             const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              height: 38,
-              child: ElevatedButton.icon(
-                onPressed: () => _addKeyword(),
-                icon: const Icon(Icons.add_rounded, size: 16),
-                label: const Text('Add to Report'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8)),
-                ),
-              ),
-            ),
-            if (_searchKeywords.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Text(
-                    'Filters (${_searchKeywords.length}):',
-                    style: AppTextStyles.caption
-                        .copyWith(fontWeight: FontWeight.bold),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: allFilteredSelected
+                        ? _deselectAllFiltered
+                        : _selectAllFiltered,
+                    icon: Icon(
+                      allFilteredSelected
+                          ? Icons.deselect_rounded
+                          : Icons.select_all_rounded,
+                      size: 16,
+                      color: AppColors.primary,
+                    ),
+                    label: Text(
+                      allFilteredSelected ? 'Deselect All' : 'Select All',
+                      style: AppTextStyles.caption.copyWith(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 8),
+                      side: const BorderSide(color: AppColors.border),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                    ),
                   ),
-                  const Spacer(),
+                ),
+                if (_selectedProductIds.isNotEmpty) ...[
+                  const SizedBox(width: 8),
                   TextButton(
-                    onPressed: _clearAllKeywords,
-                    child: Text('Clear All',
-                        style: AppTextStyles.caption
-                            .copyWith(color: AppColors.danger)),
+                    onPressed: _clearAllSelections,
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    child: Text('Clear (${_selectedProductIds.length})',
+                        style: AppTextStyles.caption.copyWith(
+                            color: AppColors.danger,
+                            fontWeight: FontWeight.w600)),
                   ),
                 ],
-              ),
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: _searchKeywords.map((kw) {
-                  return Chip(
-                    label: Text(kw,
-                        style: AppTextStyles.caption.copyWith(
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.primary,
-                            fontSize: 11)),
-                    backgroundColor: AppColors.primarySoft,
-                    side: BorderSide.none,
-                    padding: const EdgeInsets.symmetric(horizontal: 2),
-                    visualDensity: VisualDensity.compact,
-                    deleteIcon: const Icon(Icons.close_rounded,
-                        size: 12, color: AppColors.primary),
-                    onDeleted: () => _removeKeyword(kw),
-                  );
-                }).toList(),
-              ),
-            ],
+              ],
+            ),
+            const SizedBox(height: 4),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Showing ${displayed.length} of ${_products.length} products',
+                  style: AppTextStyles.caption
+                      .copyWith(color: AppColors.textSecondary),
+                ),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: _selectedProductIds.isNotEmpty
+                        ? AppColors.primarySoft
+                        : AppColors.neutralSoft,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    '${_selectedProductIds.length} checked for report',
+                    style: AppTextStyles.caption.copyWith(
+                      color: _selectedProductIds.isNotEmpty
+                          ? AppColors.primary
+                          : AppColors.textSecondary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
       );
@@ -745,12 +971,11 @@ class _ReportDetailDialogState extends State<ReportDetailDialog> {
                   child: TextField(
                     controller: _itemSearchController,
                     onChanged: (_) => setState(() {}),
-                    onSubmitted: (val) => _addKeyword(val),
                     style: AppTextStyles.body
                         .copyWith(color: AppColors.textPrimary),
                     decoration: InputDecoration(
                       hintText:
-                          'Search product name or brand (e.g. Mabuhay, Cement, Steel)...',
+                          'Search product name or brand (e.g. Atlanta, Mabuhay)...',
                       hintStyle: AppTextStyles.body
                           .copyWith(color: AppColors.textMuted, fontSize: 13),
                       prefixIcon: const Icon(Icons.search_rounded,
@@ -785,65 +1010,74 @@ class _ReportDetailDialogState extends State<ReportDetailDialog> {
                   ),
                 ),
               ),
-              const SizedBox(width: 10),
-              SizedBox(
-                height: 44,
-                child: ElevatedButton.icon(
-                  onPressed: () => _addKeyword(),
-                  icon: const Icon(Icons.add_rounded, size: 18),
-                  label: const Text('Add to Report'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10)),
+              const SizedBox(width: 12),
+              OutlinedButton.icon(
+                onPressed: allFilteredSelected
+                    ? _deselectAllFiltered
+                    : _selectAllFiltered,
+                icon: Icon(
+                  allFilteredSelected
+                      ? Icons.deselect_rounded
+                      : Icons.select_all_rounded,
+                  size: 18,
+                  color: AppColors.primary,
+                ),
+                label: Text(
+                  allFilteredSelected ? 'Deselect All' : 'Select All Filtered',
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                style: OutlinedButton.styleFrom(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  side: const BorderSide(color: AppColors.border),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+              if (_selectedProductIds.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed: _clearAllSelections,
+                  child: Text('Clear Selection',
+                      style: AppTextStyles.bodyMedium
+                          .copyWith(color: AppColors.danger)),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Showing ${displayed.length} of ${_products.length} products (sorted by name/brand)',
+                style: AppTextStyles.caption
+                    .copyWith(color: AppColors.textSecondary),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: _selectedProductIds.isNotEmpty
+                      ? AppColors.primarySoft
+                      : AppColors.neutralSoft,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  '${_selectedProductIds.length} of ${_products.length} items checked for report',
+                  style: AppTextStyles.caption.copyWith(
+                    color: _selectedProductIds.isNotEmpty
+                        ? AppColors.primary
+                        : AppColors.textSecondary,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
               ),
             ],
           ),
-          if (_searchKeywords.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Text(
-                  'Active Item Filters (${_searchKeywords.length}):',
-                  style: AppTextStyles.caption
-                      .copyWith(fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 6,
-                    children: _searchKeywords.map((kw) {
-                      return Chip(
-                        label: Text(kw,
-                            style: AppTextStyles.caption.copyWith(
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.primary)),
-                        backgroundColor: AppColors.primarySoft,
-                        side: BorderSide.none,
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        visualDensity: VisualDensity.compact,
-                        deleteIcon: const Icon(Icons.close_rounded,
-                            size: 14, color: AppColors.primary),
-                        onDeleted: () => _removeKeyword(kw),
-                      );
-                    }).toList(),
-                  ),
-                ),
-                TextButton(
-                  onPressed: _clearAllKeywords,
-                  child: Text('Clear All',
-                      style: AppTextStyles.caption
-                          .copyWith(color: AppColors.danger)),
-                ),
-              ],
-            ),
-          ],
         ],
       ),
     );
@@ -864,7 +1098,10 @@ class _ReportDetailDialogState extends State<ReportDetailDialog> {
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Flexible(child: Text(label, style: AppTextStyles.bodyMedium, overflow: TextOverflow.ellipsis)),
+            Flexible(
+                child: Text(label,
+                    style: AppTextStyles.bodyMedium,
+                    overflow: TextOverflow.ellipsis)),
             const SizedBox(width: 6),
             const Icon(Icons.calendar_today_rounded,
                 size: 13, color: AppColors.textMuted),
@@ -953,9 +1190,8 @@ class _ReportDetailDialogState extends State<ReportDetailDialog> {
                       ),
                       _TableCellWidget(StatusBadge(
                           label: inbound ? 'RECEIVE' : 'RELEASE',
-                          tone: inbound
-                              ? BadgeTone.success
-                              : BadgeTone.danger)),
+                          tone:
+                              inbound ? BadgeTone.success : BadgeTone.danger)),
                       _TableCellText('${t.totalItems}'),
                       Padding(
                         padding: const EdgeInsets.all(10),
@@ -964,8 +1200,8 @@ class _ReportDetailDialogState extends State<ReportDetailDialog> {
                           children: [
                             Text(dStr, style: AppTextStyles.caption),
                             Text(t.createdByName ?? 'User',
-                                style: AppTextStyles.caption.copyWith(
-                                    color: AppColors.textSecondary)),
+                                style: AppTextStyles.caption
+                                    .copyWith(color: AppColors.textSecondary)),
                           ],
                         ),
                       ),
@@ -977,50 +1213,172 @@ class _ReportDetailDialogState extends State<ReportDetailDialog> {
           ),
         ),
       );
+    } else if (widget.reportType == ReportType.specificItems) {
+      // Interactive specific item selector with Checkboxes
+      final displayed = _displayedSpecificItems;
+
+      if (displayed.isEmpty) {
+        final query = _itemSearchController.text.trim();
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: AppColors.primarySoft,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: const Icon(Icons.search_off_rounded,
+                      color: AppColors.primary, size: 28),
+                ),
+                const SizedBox(height: 14),
+                Text('No products match "$query"', style: AppTextStyles.h3),
+                const SizedBox(height: 6),
+                Text(
+                  'Try searching for another keyword (e.g. Atlanta, Mabuhay, Cement, Steel).',
+                  textAlign: TextAlign.center,
+                  style: AppTextStyles.body
+                      .copyWith(color: AppColors.textSecondary),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+
+      final allFilteredSelected = displayed.isNotEmpty &&
+          displayed
+              .every((p) => p.id != null && _selectedProductIds.contains(p.id));
+
+      return SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minWidth: 540),
+            child: Table(
+              border: TableBorder.all(color: AppColors.border, width: 1),
+              columnWidths: const {
+                0: FixedColumnWidth(48),
+                1: FlexColumnWidth(3.0),
+                2: FlexColumnWidth(1.0),
+                3: FlexColumnWidth(1.0),
+                4: FlexColumnWidth(1.4),
+              },
+              children: [
+                TableRow(
+                  decoration: const BoxDecoration(color: AppColors.background),
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(4),
+                      child: Center(
+                        child: Checkbox(
+                          value: allFilteredSelected,
+                          activeColor: AppColors.primary,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(4)),
+                          onChanged: (_) {
+                            if (allFilteredSelected) {
+                              _deselectAllFiltered();
+                            } else {
+                              _selectAllFiltered();
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+                    const _TableCellHeader('PRODUCT NAME'),
+                    const _TableCellHeader('QTY'),
+                    const _TableCellHeader('UNIT'),
+                    const _TableCellHeader('STOCK STATUS'),
+                  ],
+                ),
+                ...displayed.map((p) {
+                  final isChecked =
+                      p.id != null && _selectedProductIds.contains(p.id);
+                  final tone = p.quantity <= 0
+                      ? BadgeTone.danger
+                      : (p.quantity <= 10
+                          ? BadgeTone.warning
+                          : BadgeTone.success);
+                  final statusStr = p.quantity <= 0
+                      ? 'Out of stock'
+                      : (p.quantity <= 10 ? 'Low stock' : 'Healthy');
+
+                  return TableRow(
+                    decoration: BoxDecoration(
+                      color: isChecked
+                          ? AppColors.primary.withValues(alpha: 0.04)
+                          : null,
+                    ),
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(4),
+                        child: Center(
+                          child: Checkbox(
+                            value: isChecked,
+                            activeColor: AppColors.primary,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(4)),
+                            onChanged: (checked) {
+                              setState(() {
+                                if (checked == true) {
+                                  if (p.id != null) {
+                                    _selectedProductIds.add(p.id!);
+                                  }
+                                } else {
+                                  _selectedProductIds.remove(p.id);
+                                }
+                              });
+                            },
+                          ),
+                        ),
+                      ),
+                      InkWell(
+                        onTap: () {
+                          setState(() {
+                            if (isChecked) {
+                              _selectedProductIds.remove(p.id);
+                            } else {
+                              if (p.id != null) {
+                                _selectedProductIds.add(p.id!);
+                              }
+                            }
+                          });
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.all(10),
+                          child: Text(
+                            p.productName,
+                            style: AppTextStyles.bodyMedium.copyWith(
+                              fontWeight:
+                                  isChecked ? FontWeight.bold : FontWeight.w500,
+                              color: isChecked
+                                  ? AppColors.primary
+                                  : AppColors.textPrimary,
+                            ),
+                          ),
+                        ),
+                      ),
+                      _TableCellText(p.formattedQuantity),
+                      _TableCellText(p.unit),
+                      _TableCellWidget(
+                          StatusBadge(label: statusStr, tone: tone)),
+                    ],
+                  );
+                }),
+              ],
+            ),
+          ),
+        ),
+      );
     } else {
       final products = _filteredProducts;
       if (products.isEmpty) {
-        if (widget.reportType == ReportType.specificItems) {
-          final query = _itemSearchController.text.trim();
-          final hasActiveQuery = query.isNotEmpty || _searchKeywords.isNotEmpty;
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    width: 56,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      color: AppColors.primarySoft,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: const Icon(Icons.search_rounded,
-                        color: AppColors.primary, size: 28),
-                  ),
-                  const SizedBox(height: 14),
-                  Text(
-                    hasActiveQuery
-                        ? 'No products match "$query"'
-                        : 'Search & Add Specific Items',
-                    style: AppTextStyles.h3,
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    hasActiveQuery
-                        ? 'Try searching for a different keyword or check product spelling.'
-                        : 'Type an item name or brand above (e.g. "Mabuhay") and click "Add to Report" to include its items.',
-                    textAlign: TextAlign.center,
-                    style: AppTextStyles.body
-                        .copyWith(color: AppColors.textSecondary),
-                  ),
-                ],
-              ),
-            ),
-          );
-        }
-
         return Center(
           child: Text('No products match this report criteria.',
               style:
@@ -1055,7 +1413,9 @@ class _ReportDetailDialogState extends State<ReportDetailDialog> {
                 ...products.map((p) {
                   final tone = p.quantity <= 0
                       ? BadgeTone.danger
-                      : (p.quantity <= 10 ? BadgeTone.warning : BadgeTone.success);
+                      : (p.quantity <= 10
+                          ? BadgeTone.warning
+                          : BadgeTone.success);
                   final statusStr = p.quantity <= 0
                       ? 'Out of stock'
                       : (p.quantity <= 10 ? 'Low stock' : 'Healthy');
@@ -1065,7 +1425,8 @@ class _ReportDetailDialogState extends State<ReportDetailDialog> {
                       _TableCellText(p.productName, isBold: true),
                       _TableCellText(p.formattedQuantity),
                       _TableCellText(p.unit),
-                      _TableCellWidget(StatusBadge(label: statusStr, tone: tone)),
+                      _TableCellWidget(
+                          StatusBadge(label: statusStr, tone: tone)),
                     ],
                   );
                 }),
@@ -1100,9 +1461,9 @@ class _ReportDetailDialogState extends State<ReportDetailDialog> {
                   child: SizedBox(
                     height: 42,
                     child: PrimaryButton(
-                      label: 'Export PDF',
+                      label: 'Preview / Export PDF',
                       icon: Icons.picture_as_pdf_outlined,
-                      onPressed: _exportPdf,
+                      onPressed: _openPdfPreview,
                     ),
                   ),
                 ),
@@ -1151,11 +1512,51 @@ class _ReportDetailDialogState extends State<ReportDetailDialog> {
           ),
           const SizedBox(width: 12),
           PrimaryButton(
-            label: 'Export PDF',
+            label: 'Preview / Export PDF',
             icon: Icons.picture_as_pdf_outlined,
-            onPressed: _exportPdf,
+            onPressed: _openPdfPreview,
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Zoomable PDF preview screen
+// ---------------------------------------------------------------------------
+class _PdfPreviewScreen extends StatelessWidget {
+  final String title;
+  final Future<Uint8List> Function(PdfPageFormat format) buildPdf;
+  final String fileName;
+
+  const _PdfPreviewScreen({
+    required this.title,
+    required this.buildPdf,
+    required this.fileName,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(title),
+        backgroundColor: AppColors.surface,
+        foregroundColor: AppColors.textPrimary,
+        elevation: 0,
+      ),
+      backgroundColor: AppColors.background,
+      body: PdfPreview(
+        build: buildPdf,
+        pdfFileName: fileName,
+        canChangePageFormat: false,
+        canChangeOrientation: false,
+        canDebug: false,
+        allowPrinting: true,
+        allowSharing: true,
+        maxPageWidth: 900,
+        scrollViewDecoration: const BoxDecoration(color: AppColors.background),
+        loadingWidget: const Center(child: CircularProgressIndicator()),
       ),
     );
   }

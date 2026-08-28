@@ -1,6 +1,6 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-
 
 class PendingApprovalException implements Exception {
   @override
@@ -41,6 +41,7 @@ class AuthService extends ChangeNotifier {
 
   String? _cachedRole;
   bool _isRoleLoading = false;
+  Future<String?>? _roleFetchFuture;
 
   /// Cached user role ('Admin', 'Manager', 'Staff'), or null if not yet loaded.
   String? get userRole => _cachedRole;
@@ -54,17 +55,37 @@ class AuthService extends ChangeNotifier {
   void _resetRole() {
     _cachedRole = null;
     _isRoleLoading = false;
+    _roleFetchFuture = null;
     notifyListeners();
   }
 
   /// Fetch user role from the `users` table in Supabase.
-  Future<String?> fetchUserRole() async {
+  /// Deduplicates in-flight calls and returns cached role when available.
+  Future<String?> fetchUserRole({bool forceRefresh = false}) async {
     final uid = userId;
     if (uid == null) {
       _resetRole();
       return null;
     }
 
+    if (!forceRefresh && _cachedRole != null) {
+      return _cachedRole;
+    }
+
+    if (_roleFetchFuture != null) {
+      return _roleFetchFuture!;
+    }
+
+    _roleFetchFuture = _doFetchUserRole(uid);
+    try {
+      final role = await _roleFetchFuture!;
+      return role;
+    } finally {
+      _roleFetchFuture = null;
+    }
+  }
+
+  Future<String?> _doFetchUserRole(String uid) async {
     _isRoleLoading = true;
     notifyListeners();
 
@@ -73,26 +94,26 @@ class AuthService extends ChangeNotifier {
           .from('users')
           .select('role, full_name, email')
           .eq('id', uid)
-          .maybeSingle();
+          .maybeSingle()
+          .timeout(const Duration(seconds: 8));
 
       if (res != null && res['role'] != null) {
         final r = res['role'].toString().trim();
         _cachedRole = r.isNotEmpty
             ? r[0].toUpperCase() + r.substring(1).toLowerCase()
-            : null; // empty string treated as pending, not Staff
+            : null;
       } else {
-        // No row, or role is null — this is a pending/unapproved user.
-        // Do NOT auto-upsert 'staff' here; that was silently granting access.
         _cachedRole = null;
         debugPrint('[AuthService] uid=$uid has no approved role yet');
       }
     } catch (e) {
       debugPrint('[AuthService] Could not fetch user role: $e');
       _cachedRole = null;
+    } finally {
+      _isRoleLoading = false;
+      notifyListeners();
     }
 
-    _isRoleLoading = false;
-    notifyListeners();
     return _cachedRole;
   }
 
@@ -112,7 +133,8 @@ class AuthService extends ChangeNotifier {
     await _client
         .from('users')
         .update({'role': formattedRole})
-        .eq('id', targetUserId);
+        .eq('id', targetUserId)
+        .timeout(const Duration(seconds: 8));
     if (targetUserId == userId) {
       _cachedRole = formattedRole[0].toUpperCase() + formattedRole.substring(1);
       notifyListeners();
@@ -124,21 +146,25 @@ class AuthService extends ChangeNotifier {
     final uid = userId;
     if (uid != null) {
       // 1. Update user metadata in auth
-      await _client.auth.updateUser(UserAttributes(data: {'full_name': fullName}));
+      await _client.auth
+          .updateUser(UserAttributes(data: {'full_name': fullName}))
+          .timeout(const Duration(seconds: 8));
       // 2. Update users table
       await _client.from('users').upsert({
         'id': uid,
         'full_name': fullName,
         'email': email,
         'role': (_cachedRole ?? 'Staff').toLowerCase(),
-      });
+      }).timeout(const Duration(seconds: 8));
       notifyListeners();
     }
   }
 
   /// Update user password.
   Future<void> updatePassword(String newPassword) async {
-    await _client.auth.updateUser(UserAttributes(password: newPassword));
+    await _client.auth
+        .updateUser(UserAttributes(password: newPassword))
+        .timeout(const Duration(seconds: 8));
   }
 
   /// Create a new account with email, password and a display name.
@@ -150,11 +176,13 @@ class AuthService extends ChangeNotifier {
   }) async {
     _resetRole();
 
-    final response = await _client.auth.signUp(
-      email: email,
-      password: password,
-      data: {'full_name': fullName},
-    );
+    final response = await _client.auth
+        .signUp(
+          email: email,
+          password: password,
+          data: {'full_name': fullName},
+        )
+        .timeout(const Duration(seconds: 10));
 
     final user = response.user;
     if (user != null) {
@@ -164,12 +192,15 @@ class AuthService extends ChangeNotifier {
           'full_name': fullName,
           'email': email,
           'role': null, // pending approval — an admin must assign a role
-        });
+        }).timeout(const Duration(seconds: 8));
       } catch (e) {
         debugPrint('[AuthService] Failed to insert into users table: $e');
       }
 
-      await signOut(); // force sign-out until admin approves the account
+      try {
+        await _client.auth.signOut().timeout(const Duration(seconds: 5));
+      } catch (_) {}
+      _resetRole();
     }
 
     return response;
@@ -180,14 +211,14 @@ class AuthService extends ChangeNotifier {
     required String email,
     required String password,
   }) async {
-    // Clear any previous user's cached role before establishing the new
-    // session, then fetch this user's real role immediately.
     _resetRole();
 
-    final response = await _client.auth.signInWithPassword(
-      email: email,
-      password: password,
-    );
+    final response = await _client.auth
+        .signInWithPassword(
+          email: email,
+          password: password,
+        )
+        .timeout(const Duration(seconds: 10));
 
     if (response.user != null) {
       await fetchUserRole();
@@ -198,7 +229,11 @@ class AuthService extends ChangeNotifier {
 
   /// End the current session.
   Future<void> signOut() async {
-    await _client.auth.signOut();
+    try {
+      await _client.auth.signOut().timeout(const Duration(seconds: 5));
+    } catch (e) {
+      debugPrint('[AuthService] signOut error: $e');
+    }
     _resetRole();
   }
 }

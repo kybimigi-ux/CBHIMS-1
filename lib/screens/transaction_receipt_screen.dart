@@ -1,9 +1,9 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
 
 import '../models/transaction.dart';
 import '../services/auth_service.dart';
@@ -11,7 +11,10 @@ import '../services/product_service.dart';
 import '../services/transaction_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/buttons.dart';
+import '../widgets/notification_banner.dart';
+import '../widgets/pdf_preview_screen.dart';
 import '../widgets/status_badge.dart';
+import 'dialogs_screen/add_transaction_screen.dart';
 
 class TransactionReceiptScreen extends StatefulWidget {
   final Transaction transaction;
@@ -99,7 +102,40 @@ class _TransactionReceiptScreenState extends State<TransactionReceiptScreen> {
     _productBalances = balances;
   }
 
-  Future<void> _printOrDownload(BuildContext context) async {
+  Future<void> _onEdit() async {
+    if (transaction.isPendingSync) {
+      NotificationBanner.show(
+        context,
+        'This transaction hasn\'t synced yet — it can\'t be edited until it\'s online.',
+        tone: NotificationTone.warning,
+      );
+      return;
+    }
+
+    try {
+      final fullTxn = transaction.id != null
+          ? await TransactionService.instance.getById(transaction.id!)
+          : transaction;
+      if (!mounted) return;
+
+      final updated = await AddTransactionScreen.showEdit(context, fullTxn);
+      if (updated == true && mounted) {
+        setState(() {
+          _loadingItems = true;
+        });
+        await _loadFullTransaction();
+      }
+    } catch (e) {
+      if (!mounted) return;
+      NotificationBanner.show(
+        context,
+        'Failed to load transaction for editing: $e',
+        tone: NotificationTone.error,
+      );
+    }
+  }
+
+  Future<Uint8List> _buildPdfBytes(PdfPageFormat format) async {
     final pdf = pw.Document();
     final isInbound = transaction.type.toLowerCase() == 'receive' ||
         transaction.type.toLowerCase() == 'inbound';
@@ -263,9 +299,15 @@ class _TransactionReceiptScreenState extends State<TransactionReceiptScreen> {
       ),
     );
 
-    await Printing.layoutPdf(
-      onLayout: (format) async => pdf.save(),
-      name: 'Voucher_${transaction.billNo}.pdf',
+    return pdf.save();
+  }
+
+  Future<void> _printOrDownload(BuildContext context) async {
+    await PdfPreviewScreen.navigateTo(
+      context,
+      title: 'Stock Voucher — ${transaction.billNo}',
+      buildPdf: _buildPdfBytes,
+      fileName: 'Voucher_${transaction.billNo.replaceAll(" ", "_")}.pdf',
     );
   }
 
@@ -296,6 +338,22 @@ class _TransactionReceiptScreenState extends State<TransactionReceiptScreen> {
         title: Text('Stock Voucher — ${transaction.billNo}',
             style: AppTextStyles.h3),
         actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: OutlinedButton.icon(
+              onPressed: _onEdit,
+              icon: const Icon(Icons.edit_outlined, size: 16),
+              label: const Text('Edit'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.textPrimary,
+                side: const BorderSide(color: AppColors.border),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              ),
+            ),
+          ),
           Padding(
             padding: const EdgeInsets.only(right: 16),
             child: PrimaryButton(

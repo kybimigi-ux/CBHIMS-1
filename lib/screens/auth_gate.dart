@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'auth_screen/login_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'auth_screen/login_screen.dart';
 import 'auth_screen/pending_approval_screen.dart';
 import 'main_layout_screen.dart';
 import '../services/auth_service.dart';
@@ -14,7 +14,6 @@ class AuthGate extends StatefulWidget {
 
 class _AuthGateState extends State<AuthGate> {
   bool _initializing = true;
-  bool _hasSession = false;
 
   @override
   void initState() {
@@ -26,17 +25,9 @@ class _AuthGateState extends State<AuthGate> {
     final session = Supabase.instance.client.auth.currentSession;
     if (session != null) {
       await AuthService.instance.fetchUserRole();
-      if (!mounted) return;
-      setState(() {
-        _hasSession = true;
-        _initializing = false;
-      });
-    } else {
-      if (!mounted) return;
-      setState(() {
-        _hasSession = false;
-        _initializing = false;
-      });
+    }
+    if (mounted) {
+      setState(() => _initializing = false);
     }
   }
 
@@ -55,35 +46,23 @@ class _AuthGateState extends State<AuthGate> {
       );
     }
 
-    return StreamBuilder<AuthState>(
-      stream: Supabase.instance.client.auth.onAuthStateChange,
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return _hasSession ? _resolveHome() : const LoginScreen();
-        }
+    return ListenableBuilder(
+      listenable: AuthService.instance,
+      builder: (context, _) {
+        final session = Supabase.instance.client.auth.currentSession;
 
-        final event = snapshot.data!.event;
-        final session = snapshot.data!.session;
-
-        if (event == AuthChangeEvent.signedOut) {
+        if (session == null || AuthService.instance.currentUser == null) {
           return const LoginScreen();
         }
 
-        if (session != null) {
-          return FutureBuilder<String?>(
-            future: AuthService.instance.fetchUserRole(),
-            builder: (context, roleSnapshot) {
-              if (roleSnapshot.connectionState == ConnectionState.waiting) {
-                return const Scaffold(
-                  body: Center(child: CircularProgressIndicator()),
-                );
-              }
-              return _resolveHome();
-            },
+        if (AuthService.instance.isRoleLoading &&
+            AuthService.instance.userRole == null) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
           );
         }
 
-        return _hasSession ? _resolveHome() : const LoginScreen();
+        return _resolveHome();
       },
     );
   }

@@ -13,6 +13,34 @@ import '../../widgets/status_badge.dart';
 import '../dialogs_screen/add_transaction_screen.dart';
 import '../transaction_receipt_screen.dart';
 
+enum TransactionTypeFilter { all, receive, release }
+
+extension _TransactionTypeFilterLabel on TransactionTypeFilter {
+  String get label {
+    switch (this) {
+      case TransactionTypeFilter.all:
+        return 'All Types';
+      case TransactionTypeFilter.receive:
+        return 'Receive';
+      case TransactionTypeFilter.release:
+        return 'Release';
+    }
+  }
+}
+
+enum TransactionSort { recentlyAdded, oldestFirst }
+
+extension _TransactionSortLabel on TransactionSort {
+  String get label {
+    switch (this) {
+      case TransactionSort.recentlyAdded:
+        return 'Recently Added';
+      case TransactionSort.oldestFirst:
+        return 'Oldest First';
+    }
+  }
+}
+
 class TransactionsScreen extends StatefulWidget {
   const TransactionsScreen({super.key});
 
@@ -21,10 +49,14 @@ class TransactionsScreen extends StatefulWidget {
 }
 
 class _TransactionsScreenState extends State<TransactionsScreen> {
+  final TextEditingController _searchController = TextEditingController();
   List<Transaction> _transactions = [];
   bool _loading = true;
   String? _error;
   StreamSubscription<bool>? _syncSubscription;
+
+  TransactionTypeFilter _typeFilter = TransactionTypeFilter.all;
+  TransactionSort _sortOption = TransactionSort.recentlyAdded;
 
   bool get _isAdmin => AuthService.instance.isAdmin;
 
@@ -47,6 +79,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
 
   @override
   void dispose() {
+    _searchController.dispose();
     _syncSubscription?.cancel();
     super.dispose();
   }
@@ -64,7 +97,8 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
         return Transaction(
           billNo: p.billNo,
           type: p.type,
-          totalItems: p.items.fold<double>(0.0, (sum, item) => sum + item.quantity),
+          totalItems:
+              p.items.fold<double>(0.0, (sum, item) => sum + item.quantity),
           remarks: p.remarks,
           createdBy: p.userId,
           createdAt: p.queuedAt,
@@ -98,6 +132,52 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     }
   }
 
+  List<Transaction> get _filteredTransactions {
+    final query = _searchController.text.trim().toLowerCase();
+
+    final filtered = _transactions.where((t) {
+      final matchesQuery =
+          query.isEmpty || t.billNo.toLowerCase().contains(query);
+
+      final matchesType = switch (_typeFilter) {
+        TransactionTypeFilter.all => true,
+        TransactionTypeFilter.receive => t.type.toLowerCase() == 'receive' ||
+            t.type.toLowerCase() == 'inbound',
+        TransactionTypeFilter.release => t.type.toLowerCase() == 'release' ||
+            t.type.toLowerCase() == 'outbound',
+      };
+
+      return matchesQuery && matchesType;
+    }).toList();
+
+    switch (_sortOption) {
+      case TransactionSort.recentlyAdded:
+        filtered.sort((a, b) {
+          // Pending items always at top for recently added
+          if (a.isPendingSync && !b.isPendingSync) return -1;
+          if (!a.isPendingSync && b.isPendingSync) return 1;
+
+          final dateA = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+          final dateB = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+          final dateComp = dateB.compareTo(dateA);
+          if (dateComp != 0) return dateComp;
+          return (b.id ?? 0).compareTo(a.id ?? 0);
+        });
+        break;
+      case TransactionSort.oldestFirst:
+        filtered.sort((a, b) {
+          final dateA = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+          final dateB = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+          final dateComp = dateA.compareTo(dateB);
+          if (dateComp != 0) return dateComp;
+          return (a.id ?? 0).compareTo(b.id ?? 0);
+        });
+        break;
+    }
+
+    return filtered;
+  }
+
   Future<void> _onReceive() async {
     final added =
         await AddTransactionScreen.show(context, initialType: 'Receive');
@@ -129,8 +209,16 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
           : txn;
       if (!mounted) return;
       final updated = await AddTransactionScreen.showEdit(context, full);
-      if (updated == true) {
+      if (updated == true && mounted) {
         _loadTransactions();
+        final refreshed = txn.id != null
+            ? await TransactionService.instance.getById(txn.id!)
+            : full;
+        if (!mounted) return;
+        await TransactionReceiptScreen.navigateTo(context, refreshed);
+        if (mounted) {
+          _loadTransactions();
+        }
       }
     } catch (e) {
       if (!mounted) return;
@@ -222,7 +310,10 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
           ? await TransactionService.instance.getById(txn.id!)
           : txn;
       if (!mounted) return;
-      TransactionReceiptScreen.navigateTo(context, detailedTxn);
+      await TransactionReceiptScreen.navigateTo(context, detailedTxn);
+      if (mounted) {
+        _loadTransactions();
+      }
     } catch (e) {
       if (!mounted) return;
       NotificationBanner.show(
@@ -265,27 +356,41 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final filtered = _filteredTransactions;
     final screenWidth = MediaQuery.of(context).size.width;
     final compact = screenWidth < 600;
     final horizontalPadding = compact ? 16.0 : 32.0;
+
+    String subtitleText;
+    if (_loading) {
+      subtitleText = 'Loading transactions...';
+    } else if (filtered.length != _transactions.length) {
+      subtitleText =
+          '${filtered.length} of ${_transactions.length} transactions';
+      if (_pendingSyncCount > 0) {
+        subtitleText += ' · $_pendingSyncCount pending sync';
+      }
+    } else {
+      subtitleText = _pendingSyncCount > 0
+          ? '${_transactions.length} total stock transactions · $_pendingSyncCount pending sync'
+          : '${_transactions.length} total stock transactions';
+    }
 
     return Column(
       children: [
         Expanded(
           child: SingleChildScrollView(
-            padding: EdgeInsets.fromLTRB(horizontalPadding, 28, horizontalPadding, 40),
+            padding: EdgeInsets.fromLTRB(
+                horizontalPadding, 28, horizontalPadding, 40),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 ScreenHeader(
                   title: 'Transactions',
-                  subtitle: _loading
-                      ? 'Loading transactions...'
-                      : _pendingSyncCount > 0
-                          ? '${_transactions.length} total stock transactions '
-                              '· $_pendingSyncCount pending sync'
-                          : '${_transactions.length} total stock transactions',
+                  subtitle: subtitleText,
                 ),
+                const SizedBox(height: AppSpacing.lg),
+                _buildFilterBar(),
                 const SizedBox(height: AppSpacing.lg),
                 SectionCard(
                   padding: const EdgeInsets.fromLTRB(AppSpacing.lg,
@@ -317,20 +422,22 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                                 ),
                               ),
                             )
-                          : _transactions.isEmpty
+                          : filtered.isEmpty
                               ? SizedBox(
                                   height: 200,
                                   child: Center(
                                     child: Text(
-                                      'No transactions recorded yet. Click "Add Transaction" to create one.',
+                                      _transactions.isEmpty
+                                          ? 'No transactions recorded yet. Click "Receive" or "Release" to create one.'
+                                          : 'No transactions match your search or filter criteria.',
                                       style: AppTextStyles.body.copyWith(
                                           color: AppColors.textSecondary),
                                     ),
                                   ),
                                 )
                               : compact
-                                  ? _buildMobileTransactionList()
-                                  : _buildDesktopTransactionTable(),
+                                  ? _buildMobileTransactionList(filtered)
+                                  : _buildDesktopTransactionTable(filtered),
                 ),
               ],
             ),
@@ -357,7 +464,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                     height: 48,
                     child: ElevatedButton.icon(
                       onPressed: _onReceive,
-                      icon: const Icon(Icons.add_circle_outline_rounded,
+                      icon: const Icon(Icons.call_received_rounded,
                           color: Colors.white, size: 20),
                       label: Text(
                         'Receive',
@@ -381,7 +488,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                     height: 48,
                     child: ElevatedButton.icon(
                       onPressed: _onRelease,
-                      icon: const Icon(Icons.remove_circle_outline_rounded,
+                      icon: const Icon(Icons.arrow_upward_rounded,
                           color: Colors.white, size: 20),
                       label: Text(
                         'Release',
@@ -407,9 +514,133 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     );
   }
 
-  Widget _buildMobileTransactionList() {
+  Widget _buildFilterBar() {
+    final compact = MediaQuery.of(context).size.width < 600;
+
+    final searchField = Container(
+      height: 44,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.search_rounded,
+              size: 18, color: AppColors.textMuted),
+          const SizedBox(width: 10),
+          Expanded(
+            child: TextField(
+              controller: _searchController,
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration.collapsed(
+                hintText: 'Search bill number...',
+                hintStyle:
+                    AppTextStyles.body.copyWith(color: AppColors.textMuted),
+              ),
+              style: AppTextStyles.body,
+            ),
+          ),
+          if (_searchController.text.isNotEmpty)
+            GestureDetector(
+              onTap: () {
+                _searchController.clear();
+                setState(() {});
+              },
+              child: const Icon(Icons.close_rounded,
+                  size: 18, color: AppColors.textMuted),
+            ),
+        ],
+      ),
+    );
+
+    final typeDropdown = Container(
+      height: 44,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<TransactionTypeFilter>(
+          value: _typeFilter,
+          icon: const Icon(Icons.filter_list_rounded,
+              size: 18, color: AppColors.textSecondary),
+          style: AppTextStyles.body,
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          isExpanded: compact,
+          items: TransactionTypeFilter.values
+              .map((f) => DropdownMenuItem(
+                    value: f,
+                    child: Text(f.label),
+                  ))
+              .toList(),
+          onChanged: (v) =>
+              setState(() => _typeFilter = v ?? TransactionTypeFilter.all),
+        ),
+      ),
+    );
+
+    final sortDropdown = Container(
+      height: 44,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<TransactionSort>(
+          value: _sortOption,
+          icon: const Icon(Icons.swap_vert_rounded,
+              size: 18, color: AppColors.textSecondary),
+          style: AppTextStyles.body,
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          isExpanded: compact,
+          items: TransactionSort.values
+              .map((s) => DropdownMenuItem(
+                    value: s,
+                    child: Text(s.label),
+                  ))
+              .toList(),
+          onChanged: (v) =>
+              setState(() => _sortOption = v ?? TransactionSort.recentlyAdded),
+        ),
+      ),
+    );
+
+    if (compact) {
+      return Column(
+        children: [
+          searchField,
+          const SizedBox(height: AppSpacing.sm),
+          Row(
+            children: [
+              Expanded(child: typeDropdown),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(child: sortDropdown),
+            ],
+          ),
+        ],
+      );
+    }
+
+    return Row(
+      children: [
+        Expanded(child: searchField),
+        const SizedBox(width: AppSpacing.md),
+        typeDropdown,
+        const SizedBox(width: AppSpacing.md),
+        sortDropdown,
+      ],
+    );
+  }
+
+  Widget _buildMobileTransactionList(List<Transaction> transactions) {
     return Column(
-      children: _transactions.map((t) {
+      children: transactions.map((t) {
         final isInbound = t.type.toLowerCase() == 'receive' ||
             t.type.toLowerCase() == 'inbound';
         final dateStr = t.createdAt != null
@@ -422,7 +653,8 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
               onTap: () => _showTransactionDetails(t),
               borderRadius: BorderRadius.circular(8),
               child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+                padding:
+                    const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -444,7 +676,8 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                         const SizedBox(width: 8),
                         StatusBadge(
                           label: isInbound ? 'Receive' : 'Release',
-                          tone: isInbound ? BadgeTone.success : BadgeTone.danger,
+                          tone:
+                              isInbound ? BadgeTone.success : BadgeTone.danger,
                         ),
                       ],
                     ),
@@ -534,7 +767,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     );
   }
 
-  Widget _buildDesktopTransactionTable() {
+  Widget _buildDesktopTransactionTable(List<Transaction> transactions) {
     return Column(
       children: [
         Padding(
@@ -563,7 +796,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
           ),
         ),
         const Divider(height: 0.6, thickness: 0.6),
-        ..._transactions.expand((t) {
+        ...transactions.expand((t) {
           final isInbound = t.type.toLowerCase() == 'receive' ||
               t.type.toLowerCase() == 'inbound';
           final dateStr = t.createdAt != null

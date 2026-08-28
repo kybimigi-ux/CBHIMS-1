@@ -230,7 +230,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     setState(() => _submitting = true);
     try {
       if (_isEditMode) {
-        final updatedTxn = await TransactionService.instance.update(
+        await TransactionService.instance.update(
           transactionId: widget.existingTransaction!.id!,
           billNo: _billNoController.text.trim(),
           type: _type,
@@ -245,7 +245,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
           tone: NotificationTone.success,
         );
         Navigator.of(context).pop(true);
-        TransactionReceiptScreen.navigateTo(context, updatedTxn);
       } else {
         final currentUserId = AuthService.instance.userId;
 
