@@ -137,6 +137,16 @@ class _TransactionReceiptScreenState extends State<TransactionReceiptScreen> {
 
   Future<Uint8List> _buildPdfBytes(PdfPageFormat format) async {
     final pdf = pw.Document();
+    final regularFontData = await rootBundle.load('assets/fonts/Roboto-Regular.ttf');
+    final boldFontData = await rootBundle.load('assets/fonts/Roboto-Bold.ttf');
+    final regularFont = pw.Font.ttf(regularFontData);
+    final boldFont = pw.Font.ttf(boldFontData);
+
+    final theme = pw.ThemeData.withFont(
+      base: regularFont,
+      bold: boldFont,
+    );
+
     final isInbound = transaction.type.toLowerCase() == 'receive' ||
         transaction.type.toLowerCase() == 'inbound';
     final dateStr = transaction.createdAt != null
@@ -181,6 +191,7 @@ class _TransactionReceiptScreenState extends State<TransactionReceiptScreen> {
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
+        theme: theme,
         margin: const pw.EdgeInsets.all(36),
         header: (pw.Context ctx) {
           return pw.Column(
