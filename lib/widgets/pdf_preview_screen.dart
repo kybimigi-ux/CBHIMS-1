@@ -7,6 +7,10 @@ import 'notification_banner.dart';
 
 /// Interactive, zoomable in-app PDF preview screen that enables users to
 /// pinch-to-zoom, pan, print, and share/download PDF reports and vouchers.
+///
+/// Print/share actions are surfaced in the custom AppBar (not the
+/// PdfPreview package's internal toolbar) so they render consistently
+/// across all screen sizes and match the app's own styling.
 class PdfPreviewScreen extends StatefulWidget {
   final String title;
   final Future<Uint8List> Function(PdfPageFormat format) buildPdf;
@@ -43,7 +47,8 @@ class PdfPreviewScreen extends StatefulWidget {
 class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
   final TransformationController _transformationController =
       TransformationController();
-  bool _isProcessing = false;
+  bool _isPrinting = false;
+  bool _isSharing = false;
 
   @override
   void dispose() {
@@ -52,8 +57,8 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
   }
 
   Future<void> _handleShare() async {
-    if (_isProcessing) return;
-    setState(() => _isProcessing = true);
+    if (_isSharing) return;
+    setState(() => _isSharing = true);
     try {
       final bytes = await widget.buildPdf(PdfPageFormat.a4);
       await Printing.sharePdf(bytes: bytes, filename: widget.fileName);
@@ -66,13 +71,13 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
         );
       }
     } finally {
-      if (mounted) setState(() => _isProcessing = false);
+      if (mounted) setState(() => _isSharing = false);
     }
   }
 
   Future<void> _handlePrint() async {
-    if (_isProcessing) return;
-    setState(() => _isProcessing = true);
+    if (_isPrinting) return;
+    setState(() => _isPrinting = true);
     try {
       await Printing.layoutPdf(
         onLayout: (PdfPageFormat format) async => widget.buildPdf(format),
@@ -87,7 +92,7 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
         );
       }
     } finally {
-      if (mounted) setState(() => _isProcessing = false);
+      if (mounted) setState(() => _isPrinting = false);
     }
   }
 
@@ -111,7 +116,7 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
             onPressed: _resetZoom,
           ),
           IconButton(
-            icon: _isProcessing
+            icon: _isSharing
                 ? const SizedBox(
                     width: 18,
                     height: 18,
@@ -122,12 +127,21 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
                   )
                 : const Icon(Icons.share_rounded, size: 20),
             tooltip: 'Share PDF',
-            onPressed: _isProcessing ? null : _handleShare,
+            onPressed: _isSharing ? null : _handleShare,
           ),
           IconButton(
-            icon: const Icon(Icons.print_rounded, size: 20),
+            icon: _isPrinting
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppColors.primary,
+                    ),
+                  )
+                : const Icon(Icons.print_rounded, size: 20),
             tooltip: 'Print PDF',
-            onPressed: _isProcessing ? null : _handlePrint,
+            onPressed: _isPrinting ? null : _handlePrint,
           ),
           const SizedBox(width: 8),
         ],

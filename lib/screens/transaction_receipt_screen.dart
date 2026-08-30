@@ -139,6 +139,7 @@ class _TransactionReceiptScreenState extends State<TransactionReceiptScreen> {
 
   Future<Uint8List> _buildPdfBytes(PdfPageFormat format) async {
     final pdf = pw.Document();
+
     final isInbound = transaction.type.toLowerCase() == 'receive' ||
         transaction.type.toLowerCase() == 'inbound';
     final dateStr = transaction.createdAt != null
