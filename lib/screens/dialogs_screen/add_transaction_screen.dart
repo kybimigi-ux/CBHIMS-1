@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 import '../../models/product.dart';
 import '../../models/transaction.dart';
 import '../../models/transaction_item.dart';
@@ -75,6 +76,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   final _formKey = GlobalKey<FormState>();
   final _billNoController = TextEditingController();
   final _remarksController = TextEditingController();
+  late DateTime _selectedDate;
 
   late String _type;
   List<Product> _allProducts = [];
@@ -89,6 +91,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   void initState() {
     super.initState();
     final existing = widget.existingTransaction;
+    _selectedDate = existing?.createdAt ?? DateTime.now();
     if (existing != null) {
       _billNoController.text = existing.billNo;
       if (existing.remarks != null && existing.remarks != 'N/A') {
@@ -99,6 +102,85 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         ? widget.existingTransaction!.type
         : widget.initialType;
     _loadProducts();
+  }
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2035),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: AppColors.primary,
+              onPrimary: Colors.white,
+              surface: AppColors.surface,
+              onSurface: AppColors.textPrimary,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      setState(() {
+        _selectedDate = DateTime(
+          picked.year,
+          picked.month,
+          picked.day,
+          _selectedDate.hour,
+          _selectedDate.minute,
+          _selectedDate.second,
+        );
+      });
+    }
+  }
+
+  Widget _buildDateField() {
+    final formattedDate = DateFormat('MMM dd, yyyy').format(_selectedDate);
+    return _buildField(
+      label: 'Date',
+      child: InkWell(
+        onTap: _pickDate,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.calendar_today_rounded,
+                      size: 16, color: AppColors.primary),
+                  const SizedBox(width: 10),
+                  Text(
+                    formattedDate,
+                    style: AppTextStyles.body
+                        .copyWith(color: AppColors.textPrimary),
+                  ),
+                ],
+              ),
+              IconButton(
+                onPressed: _pickDate,
+                icon: const Icon(Icons.edit_calendar_rounded,
+                    size: 18, color: AppColors.textSecondary),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                tooltip: 'Select Date',
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -236,6 +318,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
           type: _type,
           items: validItems,
           remarks: _remarksController.text.trim(),
+          createdAt: _selectedDate,
         );
 
         if (!mounted) return;
@@ -254,6 +337,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
           items: validItems,
           remarks: _remarksController.text.trim(),
           userId: currentUserId,
+          createdAt: _selectedDate,
         );
 
         if (!mounted) return;
@@ -367,16 +451,43 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Remarks Row
-                  _buildField(
-                    label: 'Remarks (Optional)',
-                    child: TextFormField(
-                      controller: _remarksController,
-                      style: AppTextStyles.body
-                          .copyWith(color: AppColors.textPrimary),
-                      decoration: _inputDecoration('Notes / Purpose'),
+                  // Remarks & Date Row
+                  if (compact) ...[
+                    _buildField(
+                      label: 'Remarks (Optional)',
+                      child: TextFormField(
+                        controller: _remarksController,
+                        style: AppTextStyles.body
+                            .copyWith(color: AppColors.textPrimary),
+                        decoration: _inputDecoration('Notes / Purpose'),
+                      ),
                     ),
-                  ),
+                    const SizedBox(height: 16),
+                    _buildDateField(),
+                  ] else ...[
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          flex: 3,
+                          child: _buildField(
+                            label: 'Remarks (Optional)',
+                            child: TextFormField(
+                              controller: _remarksController,
+                              style: AppTextStyles.body
+                                  .copyWith(color: AppColors.textPrimary),
+                              decoration: _inputDecoration('Notes / Purpose'),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          flex: 2,
+                          child: _buildDateField(),
+                        ),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: 20),
 
                   // Item List Header

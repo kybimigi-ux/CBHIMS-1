@@ -22,6 +22,9 @@ class PendingTransaction {
   /// When this was first queued.
   final DateTime queuedAt;
 
+  /// Custom transaction date/time if specified by user, otherwise queuedAt.
+  final DateTime? createdAt;
+
   /// Set when a sync attempt fails. Null means "never tried" or "no error
   /// from the most recent attempt" — check [lastAttemptAt] to distinguish.
   final String? lastError;
@@ -39,6 +42,7 @@ class PendingTransaction {
     this.issuedTo,
     this.userId,
     required this.queuedAt,
+    this.createdAt,
     this.lastError,
     this.lastAttemptAt,
   });
@@ -58,6 +62,7 @@ class PendingTransaction {
       issuedTo: issuedTo,
       userId: userId,
       queuedAt: queuedAt,
+      createdAt: createdAt,
       lastError: clearError ? null : (lastError ?? this.lastError),
       lastAttemptAt: lastAttemptAt ?? this.lastAttemptAt,
     );
@@ -76,6 +81,7 @@ class PendingTransaction {
         'issuedTo': issuedTo,
         'userId': userId,
         'queuedAt': queuedAt.toIso8601String(),
+        'createdAt': (createdAt ?? queuedAt).toIso8601String(),
         'lastError': lastError,
         'lastAttemptAt': lastAttemptAt?.toIso8601String(),
       };
@@ -94,6 +100,11 @@ class PendingTransaction {
       issuedTo: json['issuedTo'] as String?,
       userId: json['userId'] as String?,
       queuedAt: DateTime.parse(json['queuedAt'] as String),
+      createdAt: json['createdAt'] != null
+          ? DateTime.tryParse(json['createdAt'] as String)
+          : (json['queuedAt'] != null
+              ? DateTime.tryParse(json['queuedAt'] as String)
+              : null),
       lastError: json['lastError'] as String?,
       lastAttemptAt: json['lastAttemptAt'] != null
           ? DateTime.parse(json['lastAttemptAt'] as String)

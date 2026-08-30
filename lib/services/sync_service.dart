@@ -69,6 +69,7 @@ class SyncService {
             remarks: item.remarks,
             issuedTo: item.issuedTo,
             userId: item.userId,
+            createdAt: item.createdAt,
           );
           await queue.remove(item.localId);
           succeeded++;
@@ -114,6 +115,7 @@ class SyncService {
         remarks: item.remarks,
         issuedTo: item.issuedTo,
         userId: item.userId,
+        createdAt: item.createdAt,
       );
       await queue.remove(item.localId);
       return result;

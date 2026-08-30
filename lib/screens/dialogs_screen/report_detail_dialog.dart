@@ -11,6 +11,7 @@ import '../../services/product_service.dart';
 import '../../services/transaction_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/buttons.dart';
+import '../../widgets/pdf_preview_screen.dart';
 import '../../widgets/status_badge.dart';
 
 enum ReportType {
@@ -389,7 +390,7 @@ class _ReportDetailDialogState extends State<ReportDetailDialog> {
     final pdf = pw.Document();
 
     final dateRangeStr =
-        '${_dateFormat.format(_startDate)} – ${_dateFormat.format(_endDate)}';
+        '${_dateFormat.format(_startDate)} - ${_dateFormat.format(_endDate)}';
     final generatedAtStr =
         DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now());
 
@@ -530,14 +531,11 @@ class _ReportDetailDialogState extends State<ReportDetailDialog> {
     }
 
     if (!mounted) return;
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => _PdfPreviewScreen(
-          title: widget.reportTitle,
-          buildPdf: _buildPdfBytes,
-          fileName: '${widget.reportTitle.replaceAll(" ", "_")}.pdf',
-        ),
-      ),
+    await PdfPreviewScreen.navigateTo(
+      context,
+      title: widget.reportTitle,
+      buildPdf: _buildPdfBytes,
+      fileName: '${widget.reportTitle.replaceAll(" ", "_")}.pdf',
     );
   }
 
@@ -1517,46 +1515,6 @@ class _ReportDetailDialogState extends State<ReportDetailDialog> {
             onPressed: _openPdfPreview,
           ),
         ],
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Zoomable PDF preview screen
-// ---------------------------------------------------------------------------
-class _PdfPreviewScreen extends StatelessWidget {
-  final String title;
-  final Future<Uint8List> Function(PdfPageFormat format) buildPdf;
-  final String fileName;
-
-  const _PdfPreviewScreen({
-    required this.title,
-    required this.buildPdf,
-    required this.fileName,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(title),
-        backgroundColor: AppColors.surface,
-        foregroundColor: AppColors.textPrimary,
-        elevation: 0,
-      ),
-      backgroundColor: AppColors.background,
-      body: PdfPreview(
-        build: buildPdf,
-        pdfFileName: fileName,
-        canChangePageFormat: false,
-        canChangeOrientation: false,
-        canDebug: false,
-        allowPrinting: true,
-        allowSharing: true,
-        maxPageWidth: 900,
-        scrollViewDecoration: const BoxDecoration(color: AppColors.background),
-        loadingWidget: const Center(child: CircularProgressIndicator()),
       ),
     );
   }

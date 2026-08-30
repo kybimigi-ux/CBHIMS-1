@@ -434,6 +434,7 @@ class TransactionService {
     String? remarks,
     String? issuedTo,
     String? userId,
+    DateTime? createdAt,
   }) async {
     // Pre-flight stock check for outbound transactions. This happens
     // BEFORE any row is written, so a rejected request leaves no trace
@@ -452,6 +453,7 @@ class TransactionService {
         remarks: remarks,
         issuedTo: issuedTo,
         userId: userId,
+        createdAt: createdAt,
       );
     } catch (e) {
       if (e is InsufficientStockError) rethrow;
@@ -461,6 +463,7 @@ class TransactionService {
           '[TransactionService] create() failed due to connectivity, queuing offline: $e');
 
       final localId = const Uuid().v4();
+      final effectiveDate = createdAt ?? DateTime.now();
       final pending = PendingTransaction(
         localId: localId,
         billNo: billNo,
@@ -471,6 +474,7 @@ class TransactionService {
         issuedTo: issuedTo,
         userId: userId,
         queuedAt: DateTime.now(),
+        createdAt: effectiveDate,
       );
       await OfflineQueueService.instance.enqueue(pending);
 
@@ -484,7 +488,7 @@ class TransactionService {
             : 'N/A',
         createdBy: userId,
         createdByName: null,
-        createdAt: DateTime.now(),
+        createdAt: effectiveDate,
         items: items,
         localId: localId,
         isPendingSync: true,
@@ -501,6 +505,7 @@ class TransactionService {
     String? remarks,
     String? issuedTo,
     String? userId,
+    DateTime? createdAt,
   }) async {
     final totalItems =
         items.fold<double>(0.0, (sum, item) => sum + item.quantity);
@@ -534,6 +539,7 @@ class TransactionService {
       required String typeVal,
       required bool includeCreatedBy,
       bool includeIssuedTo = true,
+      bool includeCreatedAt = true,
     }) {
       final map = <String, dynamic>{
         'bill_no': currentBillNo,
@@ -541,6 +547,9 @@ class TransactionService {
         'total_items': totalItems,
         'remarks': finalRemarks,
       };
+      if (includeCreatedAt && createdAt != null) {
+        map['created_at'] = createdAt.toIso8601String();
+      }
       if (statusVal != null) map['status'] = statusVal;
       if (includeIssuedTo) map['issued_to'] = finalIssuedTo;
       if (includeCreatedBy && userId != null && userId.isNotEmpty) {
@@ -729,6 +738,7 @@ class TransactionService {
     required List<TransactionItem> items,
     String? remarks,
     String? issuedTo,
+    DateTime? createdAt,
   }) async {
     // 1. Fetch original transaction before changes to calculate stock delta.
     Transaction? oldTxn;
@@ -776,13 +786,18 @@ class TransactionService {
     final String finalRemarks =
         (remarks != null && remarks.trim().isNotEmpty) ? remarks.trim() : 'N/A';
 
-    await _client.from('transactions').update({
+    final updatePayload = <String, dynamic>{
       'bill_no': billNo,
       'type': type,
       'total_items': totalItems,
       'issued_to': finalIssuedTo,
       'remarks': finalRemarks,
-    }).eq('id', transactionId);
+    };
+    if (createdAt != null) {
+      updatePayload['created_at'] = createdAt.toIso8601String();
+    }
+
+    await _client.from('transactions').update(updatePayload).eq('id', transactionId);
 
     // Replace items: delete existing, insert new.
     try {

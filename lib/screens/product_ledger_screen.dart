@@ -362,7 +362,7 @@ class _ProductLedgerScreenState extends State<ProductLedgerScreen> {
   Future<void> _exportPdf() async {
     await PdfPreviewScreen.navigateTo(
       context,
-      title: 'Stock Card — ${_product.productName}',
+      title: 'Stock Card - ${_product.productName}',
       buildPdf: _buildPdfBytes,
       fileName: 'StockCard_${_product.productName.replaceAll(" ", "_")}.pdf',
     );

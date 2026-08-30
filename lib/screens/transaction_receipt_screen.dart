@@ -4,6 +4,7 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 
 import '../models/transaction.dart';
 import '../services/auth_service.dart';
@@ -92,7 +93,8 @@ class _TransactionReceiptScreenState extends State<TransactionReceiptScreen> {
     for (final item in transaction.items) {
       if (item.productId != null && !balances.containsKey(item.productId)) {
         try {
-          final product = await ProductService.instance.getById(item.productId!);
+          final product =
+              await ProductService.instance.getById(item.productId!);
           if (product != null) {
             balances[item.productId!] = product.quantity.toDouble();
           }
@@ -150,7 +152,8 @@ class _TransactionReceiptScreenState extends State<TransactionReceiptScreen> {
       dataRows = transaction.items.asMap().entries.map((entry) {
         final idx = entry.key + 1;
         final item = entry.value;
-        final bal = (item.productId != null && _productBalances.containsKey(item.productId))
+        final bal = (item.productId != null &&
+                _productBalances.containsKey(item.productId))
             ? _formatNum(_productBalances[item.productId])
             : '-';
         return [
@@ -302,10 +305,28 @@ class _TransactionReceiptScreenState extends State<TransactionReceiptScreen> {
     return pdf.save();
   }
 
+  Future<void> _sharePdf(BuildContext context) async {
+    try {
+      final bytes = await _buildPdfBytes(PdfPageFormat.a4);
+      await Printing.sharePdf(
+        bytes: bytes,
+        filename: 'Voucher_${transaction.billNo.replaceAll(" ", "_")}.pdf',
+      );
+    } catch (e) {
+      if (context.mounted) {
+        NotificationBanner.show(
+          context,
+          'Failed to share PDF: $e',
+          tone: NotificationTone.error,
+        );
+      }
+    }
+  }
+
   Future<void> _printOrDownload(BuildContext context) async {
     await PdfPreviewScreen.navigateTo(
       context,
-      title: 'Stock Voucher — ${transaction.billNo}',
+      title: 'Stock Voucher - ${transaction.billNo}',
       buildPdf: _buildPdfBytes,
       fileName: 'Voucher_${transaction.billNo.replaceAll(" ", "_")}.pdf',
     );
@@ -316,7 +337,7 @@ class _TransactionReceiptScreenState extends State<TransactionReceiptScreen> {
     final isInbound = transaction.type.toLowerCase() == 'receive' ||
         transaction.type.toLowerCase() == 'inbound';
     final dateStr = transaction.createdAt != null
-        ? DateFormat('MMM dd, yyyy — hh:mm a').format(transaction.createdAt!)
+        ? DateFormat('MMM dd, yyyy - hh:mm a').format(transaction.createdAt!)
         : 'N/A';
 
     final String creatorName = (transaction.createdByName != null &&
@@ -335,9 +356,17 @@ class _TransactionReceiptScreenState extends State<TransactionReceiptScreen> {
         backgroundColor: AppColors.surface,
         elevation: 0,
         foregroundColor: AppColors.textPrimary,
-        title: Text('Stock Voucher — ${transaction.billNo}',
+        title: Text('Stock Voucher - ${transaction.billNo}',
             style: AppTextStyles.h3),
         actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 4),
+            child: IconButton(
+              tooltip: 'Share PDF',
+              icon: const Icon(Icons.share_rounded, size: 20),
+              onPressed: () => _sharePdf(context),
+            ),
+          ),
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: OutlinedButton.icon(
@@ -409,10 +438,12 @@ class _TransactionReceiptScreenState extends State<TransactionReceiptScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text('Celis Brothers Hardware',
-                                    style: AppTextStyles.h2.copyWith(fontSize: 17)),
+                                    style: AppTextStyles.h2
+                                        .copyWith(fontSize: 17)),
                                 const SizedBox(height: 2),
                                 Text('Official Voucher',
-                                    style: AppTextStyles.caption.copyWith(fontSize: 11)),
+                                    style: AppTextStyles.caption
+                                        .copyWith(fontSize: 11)),
                               ],
                             ),
                           ),
@@ -427,7 +458,9 @@ class _TransactionReceiptScreenState extends State<TransactionReceiptScreen> {
                                   fontWeight: FontWeight.bold, fontSize: 14)),
                           StatusBadge(
                             label: isInbound ? '+ RECEIVE' : '- RELEASE',
-                            tone: isInbound ? BadgeTone.success : BadgeTone.danger,
+                            tone: isInbound
+                                ? BadgeTone.success
+                                : BadgeTone.danger,
                           ),
                         ],
                       ),
@@ -449,10 +482,13 @@ class _TransactionReceiptScreenState extends State<TransactionReceiptScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text('Celis Brothers Hardware',
-                                    style: AppTextStyles.h1.copyWith(fontSize: 24)),
+                                    style: AppTextStyles.h1
+                                        .copyWith(fontSize: 24)),
                                 const SizedBox(height: 2),
-                                Text('Inventory Management System — Official Voucher',
-                                    style: AppTextStyles.caption.copyWith(fontSize: 13)),
+                                Text(
+                                    'Inventory Management System — Official Voucher',
+                                    style: AppTextStyles.caption
+                                        .copyWith(fontSize: 13)),
                               ],
                             ),
                           ),
@@ -461,11 +497,14 @@ class _TransactionReceiptScreenState extends State<TransactionReceiptScreen> {
                             children: [
                               Text(transaction.billNo,
                                   style: AppTextStyles.mono.copyWith(
-                                      fontWeight: FontWeight.bold, fontSize: 16)),
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16)),
                               const SizedBox(height: 4),
                               StatusBadge(
                                 label: isInbound ? '+ RECEIVE' : '- RELEASE',
-                                tone: isInbound ? BadgeTone.success : BadgeTone.danger,
+                                tone: isInbound
+                                    ? BadgeTone.success
+                                    : BadgeTone.danger,
                               ),
                             ],
                           ),
@@ -495,7 +534,8 @@ class _TransactionReceiptScreenState extends State<TransactionReceiptScreen> {
                             children: [
                               Text('Created By', style: AppTextStyles.label),
                               const SizedBox(height: 4),
-                              Text(creatorName, style: AppTextStyles.bodyMedium),
+                              Text(creatorName,
+                                  style: AppTextStyles.bodyMedium),
                             ],
                           ),
                         ),
@@ -515,7 +555,8 @@ class _TransactionReceiptScreenState extends State<TransactionReceiptScreen> {
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(color: AppColors.border),
                         ),
-                        child: Text(transaction.remarks!, style: AppTextStyles.body),
+                        child: Text(transaction.remarks!,
+                            style: AppTextStyles.body),
                       ),
                     ],
 
@@ -537,14 +578,15 @@ class _TransactionReceiptScreenState extends State<TransactionReceiptScreen> {
                                   horizontal: 16, vertical: 12),
                               decoration: const BoxDecoration(
                                 color: AppColors.background,
-                                borderRadius:
-                                    BorderRadius.vertical(top: Radius.circular(9)),
+                                borderRadius: BorderRadius.vertical(
+                                    top: Radius.circular(9)),
                               ),
                               child: Row(
                                 children: [
                                   SizedBox(
                                       width: 40,
-                                      child: Text('#', style: AppTextStyles.label)),
+                                      child: Text('#',
+                                          style: AppTextStyles.label)),
                                   Expanded(
                                       child: Text('PRODUCT NAME',
                                           style: AppTextStyles.label)),
@@ -570,7 +612,8 @@ class _TransactionReceiptScreenState extends State<TransactionReceiptScreen> {
                                 child: SizedBox(
                                   width: 24,
                                   height: 24,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                  child:
+                                      CircularProgressIndicator(strokeWidth: 2),
                                 ),
                               ),
                             )
@@ -593,33 +636,39 @@ class _TransactionReceiptScreenState extends State<TransactionReceiptScreen> {
                                       horizontal: 14, vertical: 12),
                                   decoration: const BoxDecoration(
                                     border: Border(
-                                        bottom: BorderSide(color: AppColors.divider)),
+                                        bottom: BorderSide(
+                                            color: AppColors.divider)),
                                   ),
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       // Product name in full — no truncation
                                       Text(
                                         '$idx. ${item.productName}',
-                                        style: AppTextStyles.bodyMedium.copyWith(
+                                        style:
+                                            AppTextStyles.bodyMedium.copyWith(
                                           fontWeight: FontWeight.w600,
                                           color: AppColors.textPrimary,
                                         ),
                                       ),
                                       const SizedBox(height: 6),
                                       Row(
-                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
                                         children: [
                                           Container(
                                             padding: const EdgeInsets.symmetric(
                                                 horizontal: 8, vertical: 2),
                                             decoration: BoxDecoration(
                                               color: AppColors.primarySoft,
-                                              borderRadius: BorderRadius.circular(4),
+                                              borderRadius:
+                                                  BorderRadius.circular(4),
                                             ),
                                             child: Text(
                                               'Qty: ${item.formattedQuantity}',
-                                              style: AppTextStyles.caption.copyWith(
+                                              style: AppTextStyles.caption
+                                                  .copyWith(
                                                 color: AppColors.primary,
                                                 fontWeight: FontWeight.bold,
                                               ),
@@ -627,7 +676,8 @@ class _TransactionReceiptScreenState extends State<TransactionReceiptScreen> {
                                           ),
                                           Text(
                                             'Balance: ${(item.productId != null && _productBalances.containsKey(item.productId)) ? _formatNum(_productBalances[item.productId]) : '-'}',
-                                            style: AppTextStyles.caption.copyWith(
+                                            style:
+                                                AppTextStyles.caption.copyWith(
                                               color: AppColors.textSecondary,
                                               fontWeight: FontWeight.w500,
                                             ),
@@ -644,7 +694,8 @@ class _TransactionReceiptScreenState extends State<TransactionReceiptScreen> {
                                     horizontal: 16, vertical: 14),
                                 decoration: const BoxDecoration(
                                   border: Border(
-                                      bottom: BorderSide(color: AppColors.divider)),
+                                      bottom:
+                                          BorderSide(color: AppColors.divider)),
                                 ),
                                 child: Row(
                                   children: [
@@ -660,15 +711,18 @@ class _TransactionReceiptScreenState extends State<TransactionReceiptScreen> {
                                       child: Text(
                                         item.formattedQuantity,
                                         textAlign: TextAlign.right,
-                                        style: AppTextStyles.bodyLarge
-                                            .copyWith(fontWeight: FontWeight.bold),
+                                        style: AppTextStyles.bodyLarge.copyWith(
+                                            fontWeight: FontWeight.bold),
                                       ),
                                     ),
                                     SizedBox(
                                       width: 80,
                                       child: Text(
-                                        (item.productId != null && _productBalances.containsKey(item.productId))
-                                            ? _formatNum(_productBalances[item.productId])
+                                        (item.productId != null &&
+                                                _productBalances.containsKey(
+                                                    item.productId))
+                                            ? _formatNum(_productBalances[
+                                                item.productId])
                                             : '-',
                                         textAlign: TextAlign.right,
                                         style: AppTextStyles.bodyMedium,
@@ -695,8 +749,9 @@ class _TransactionReceiptScreenState extends State<TransactionReceiptScreen> {
                         const SizedBox(width: 8),
                         Text(
                           'Total: ${transaction.formattedTotalItems}',
-                          style:
-                              AppTextStyles.h3.copyWith(color: AppColors.primary, fontSize: compact ? 16 : 18),
+                          style: AppTextStyles.h3.copyWith(
+                              color: AppColors.primary,
+                              fontSize: compact ? 16 : 18),
                         ),
                       ],
                     ),

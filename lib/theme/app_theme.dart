@@ -66,14 +66,29 @@ class AppTextStyles {
 }
 
 ThemeData buildAppTheme() {
-  final base = ThemeData.light(useMaterial3: true);
+  final colorScheme = ColorScheme.fromSeed(
+    seedColor: AppColors.primary,
+    primary: AppColors.primary,
+    surface: AppColors.surface,
+    error: AppColors.danger,
+    brightness: Brightness.light,
+  ).copyWith(
+    primaryContainer: AppColors.primarySoft,
+    surface: AppColors.surface,
+    surfaceContainerHighest: AppColors.background,
+    outline: AppColors.border,
+    outlineVariant: AppColors.divider,
+    surfaceTint: Colors.transparent,
+  );
+
+  final base = ThemeData(
+    useMaterial3: true,
+    colorScheme: colorScheme,
+    scaffoldBackgroundColor: AppColors.background,
+  );
+
   return base.copyWith(
     scaffoldBackgroundColor: AppColors.background,
-    colorScheme: base.colorScheme.copyWith(
-      primary: AppColors.primary,
-      surface: AppColors.surface,
-      error: AppColors.danger,
-    ),
     textTheme: GoogleFonts.interTextTheme(base.textTheme),
     dividerColor: AppColors.divider,
     splashFactory: NoSplash.splashFactory,
