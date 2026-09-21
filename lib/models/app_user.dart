@@ -14,14 +14,24 @@ class AppUser {
   });
 
   factory AppUser.fromJson(Map<String, dynamic> json) {
+    DateTime? parseDate(dynamic val) {
+      if (val == null) return null;
+      // Handle Firestore Timestamp
+      if (val.runtimeType.toString().contains('Timestamp')) {
+        try {
+          return (val as dynamic).toDate() as DateTime;
+        } catch (_) {}
+      }
+      if (val is String) return DateTime.tryParse(val);
+      return null;
+    }
+
     return AppUser(
       id: json['id'] as String? ?? '',
       fullName: json['full_name'] as String? ?? '',
       email: json['email'] as String? ?? '',
       role: json['role'] as String?,
-      createdAt: json['created_at'] != null
-          ? DateTime.tryParse(json['created_at'] as String)
-          : null,
+      createdAt: parseDate(json['created_at']),
     );
   }
 

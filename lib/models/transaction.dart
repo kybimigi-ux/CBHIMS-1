@@ -1,25 +1,22 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'transaction_item.dart';
 
 class Transaction {
-  final int? id;
+  final String? id; // Firestore document ID
   final String billNo;
   final String type; // 'Receive' or 'Release'
   final double totalItems;
   final String? remarks;
-  final String? createdBy; // UUID of the user
-  final String? createdByName; // joined from users table
+  final String? issuedTo;
+  final String? createdBy; // UID of the user
+  final String? createdByName; // resolved from users collection
   final DateTime? createdAt;
   final List<TransactionItem> items;
 
-  /// Set only for transactions that were queued while offline. This is
-  /// the Hive key in OfflineQueueService, letting the UI look the record
-  /// up in the queue (e.g. to show a "retry" action) even though it has
-  /// no server [id] yet.
+  /// Set only for transactions that were queued while offline.
   final String? localId;
 
-  /// True until this transaction is confirmed to have reached Supabase.
-  /// Always false for anything loaded via [fromJson], since a row that
-  /// came back from the server is by definition already synced.
+  /// True until this transaction is confirmed to have reached Firestore.
   final bool isPendingSync;
 
   const Transaction({
@@ -28,6 +25,7 @@ class Transaction {
     required this.type,
     this.totalItems = 0.0,
     this.remarks,
+    this.issuedTo,
     this.createdBy,
     this.createdByName,
     this.createdAt,
@@ -37,56 +35,62 @@ class Transaction {
   });
 
   factory Transaction.fromJson(Map<String, dynamic> json) {
-    // Handle joined users(full_name)
+    // Resolve user name that was injected by the service layer
     String? userName;
     if (json['users'] != null && json['users'] is Map) {
       userName = json['users']['full_name'] as String?;
     }
+    userName ??= json['created_by_name'] as String?;
 
-    // Handle joined transaction_items if present
+    // Handle transaction_items if present (injected by service layer)
     List<TransactionItem> txnItems = [];
-    if (json['transaction_items'] != null && json['transaction_items'] is List) {
+    if (json['transaction_items'] != null &&
+        json['transaction_items'] is List) {
       txnItems = (json['transaction_items'] as List)
-          .map((item) => TransactionItem.fromJson(item as Map<String, dynamic>))
+          .map((item) =>
+              TransactionItem.fromJson(item as Map<String, dynamic>))
           .toList();
     }
 
     DateTime? parsedDate;
-    if (json['created_at'] != null) {
-      if (json['created_at'] is String) {
-        parsedDate = DateTime.tryParse(json['created_at'] as String);
-      } else if (json['created_at'] is DateTime) {
-        parsedDate = json['created_at'] as DateTime;
-      }
+    final rawDate = json['created_at'];
+    if (rawDate is Timestamp) {
+      parsedDate = rawDate.toDate();
+    } else if (rawDate is String) {
+      parsedDate = DateTime.tryParse(rawDate);
+    } else if (rawDate is DateTime) {
+      parsedDate = rawDate;
     }
 
     double parsedTotalItems = 0.0;
-    if (json['total_items'] != null) {
-      if (json['total_items'] is num) {
-        parsedTotalItems = (json['total_items'] as num).toDouble();
-      } else if (json['total_items'] is String) {
-        parsedTotalItems =
-            double.tryParse((json['total_items'] as String).replaceAll(',', '.')) ??
-                0.0;
-      }
+    if (json['total_items'] is num) {
+      parsedTotalItems = (json['total_items'] as num).toDouble();
+    } else if (json['total_items'] is String) {
+      parsedTotalItems =
+          double.tryParse((json['total_items'] as String).replaceAll(',', '.')) ??
+              0.0;
     }
 
     return Transaction(
-      id: json['id'] is int
-          ? json['id'] as int
-          : int.tryParse(json['id']?.toString() ?? ''),
+      id: json['id']?.toString(),
       billNo: json['bill_no']?.toString() ?? '',
       type: json['type']?.toString() ?? 'Receive',
       totalItems: parsedTotalItems,
       remarks: json['remarks']?.toString(),
+      issuedTo: json['issued_to']?.toString(),
       createdBy: json['created_by']?.toString(),
       createdByName: userName,
       createdAt: parsedDate,
       items: txnItems,
-      // Anything built from a server response is, by definition, synced.
       localId: null,
       isPendingSync: false,
     );
+  }
+
+  factory Transaction.fromFirestore(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+    data['id'] = doc.id;
+    return Transaction.fromJson(data);
   }
 
   /// Formatted string representing totalItems without unnecessary trailing zeroes.

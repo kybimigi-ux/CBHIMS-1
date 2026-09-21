@@ -1,7 +1,9 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class TransactionItem {
-  final int? id;
-  final int? transactionId;
-  final int? productId;
+  final String? id; // Firestore document ID
+  final String? transactionId;
+  final String? productId;
   final String productName;
   final double quantity;
   final String unit;
@@ -12,7 +14,7 @@ class TransactionItem {
     this.productId,
     required this.productName,
     required this.quantity,
-    this.unit = 'pcs', // sensible default
+    this.unit = 'pcs',
   });
 
   factory TransactionItem.fromJson(Map<String, dynamic> json) {
@@ -24,24 +26,20 @@ class TransactionItem {
       return 0.0;
     }
 
-    int? parseInt(dynamic val) {
-      if (val is int) return val;
-      if (val is num) return val.toInt();
-      if (val is String) return int.tryParse(val);
-      return null;
-    }
-
     return TransactionItem(
-      id: json['id'] != null ? parseInt(json['id']) : null,
-      transactionId: json['transaction_id'] != null
-          ? parseInt(json['transaction_id'])
-          : null,
-      productId:
-          json['product_id'] != null ? parseInt(json['product_id']) : null,
+      id: json['id']?.toString(),
+      transactionId: json['transaction_id']?.toString(),
+      productId: json['product_id']?.toString(),
       productName: json['product_name']?.toString() ?? 'Item',
       quantity: parseDouble(json['quantity']),
       unit: json['unit']?.toString() ?? 'pcs',
     );
+  }
+
+  factory TransactionItem.fromFirestore(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+    data['id'] = doc.id;
+    return TransactionItem.fromJson(data);
   }
 
   /// Formatted string representing quantity without unnecessary trailing zeroes.
@@ -52,7 +50,7 @@ class TransactionItem {
     return quantity.toString().replaceAll(RegExp(r'([.]*0)(?!.*\d)'), '');
   }
 
-  Map<String, dynamic> toInsertJson(int txnId) {
+  Map<String, dynamic> toInsertJson(String txnId) {
     return {
       'transaction_id': txnId,
       'product_id': productId,

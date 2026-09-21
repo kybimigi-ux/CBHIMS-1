@@ -76,7 +76,7 @@ class PendingTransaction {
         'billNo': billNo,
         'type': type,
         'status': status,
-        'items': items.map((i) => i.toInsertJson(0)).toList(),
+        'items': items.map((i) => i.toInsertJson('')).toList(),
         'remarks': remarks,
         'issuedTo': issuedTo,
         'userId': userId,

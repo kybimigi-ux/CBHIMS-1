@@ -1,8 +1,10 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class Product {
-  final int? id;
+  final String? id; // Firestore document ID
   final String productName;
-  final int? categoryId;
-  final String? categoryName; // joined from categories table
+  final String? categoryId;
+  final String? categoryName;
   final double quantity;
   final String unit;
   final bool isActive;
@@ -22,11 +24,6 @@ class Product {
   });
 
   factory Product.fromJson(Map<String, dynamic> json) {
-    String? catName;
-    if (json['categories'] != null && json['categories'] is Map) {
-      catName = json['categories']['name'] as String?;
-    }
-
     double parseQty(dynamic val) {
       if (val is num) return val.toDouble();
       if (val is String) {
@@ -35,19 +32,30 @@ class Product {
       return 0.0;
     }
 
+    DateTime? parseDate(dynamic val) {
+      if (val == null) return null;
+      if (val is Timestamp) return val.toDate();
+      if (val is String) return DateTime.tryParse(val);
+      return null;
+    }
+
     return Product(
-      id: json['id'] as int?,
+      id: json['id'] as String?,
       productName: json['product_name'] as String? ?? '',
-      categoryId: json['category_id'] as int?,
-      categoryName: catName,
+      categoryId: json['category_id'] as String?,
+      categoryName: json['category_name'] as String?,
       quantity: parseQty(json['quantity']),
       unit: json['unit'] as String? ?? 'pcs',
       isActive: json['is_active'] as bool? ?? true,
       remarks: json['remarks'] as String?,
-      createdAt: json['created_at'] != null
-          ? DateTime.tryParse(json['created_at'] as String)
-          : null,
+      createdAt: parseDate(json['created_at']),
     );
+  }
+
+  factory Product.fromFirestore(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+    data['id'] = doc.id;
+    return Product.fromJson(data);
   }
 
   /// Formatted string representing quantity without unnecessary trailing zeroes.
@@ -58,7 +66,7 @@ class Product {
     return quantity.toString().replaceAll(RegExp(r'([.]*0)(?!.*\d)'), '');
   }
 
-  /// Serializes fields for INSERT / UPDATE.
+  /// Serializes fields for INSERT / UPDATE (id is NOT included — Firestore manages it).
   Map<String, dynamic> toInsertJson() {
     return {
       'product_name': productName,
@@ -67,13 +75,14 @@ class Product {
       'unit': unit,
       'is_active': isActive,
       if (remarks != null && remarks!.isNotEmpty) 'remarks': remarks,
+      'created_at': FieldValue.serverTimestamp(),
     };
   }
 
   Product copyWith({
-    int? id,
+    String? id,
     String? productName,
-    int? categoryId,
+    String? categoryId,
     String? categoryName,
     double? quantity,
     String? unit,
