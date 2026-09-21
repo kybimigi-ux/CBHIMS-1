@@ -161,7 +161,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
           final dateB = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
           final dateComp = dateB.compareTo(dateA);
           if (dateComp != 0) return dateComp;
-          return (b.id ?? 0).compareTo(a.id ?? 0);
+          return (b.id ?? '').compareTo(a.id ?? '');
         });
         break;
       case TransactionSort.oldestFirst:
@@ -170,7 +170,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
           final dateB = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
           final dateComp = dateA.compareTo(dateB);
           if (dateComp != 0) return dateComp;
-          return (a.id ?? 0).compareTo(b.id ?? 0);
+          return (a.id ?? '').compareTo(b.id ?? '');
         });
         break;
     }

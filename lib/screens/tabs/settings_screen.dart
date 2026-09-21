@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../models/app_user.dart';
 import '../../services/auth_service.dart';
 import '../../services/settings_service.dart';
@@ -62,110 +62,58 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     setState(() => _loadingTeam = true);
     try {
-      // ── TEMP DEBUG ──
-      final uid = Supabase.instance.client.auth.currentUser?.id;
-      debugPrint('[DEBUG] Current auth uid: $uid');
+      final rawUsers = await AuthService.instance.getAllUsers();
 
-      final selfCheck = await Supabase.instance.client
-          .from('users')
-          .select('id, role')
-          .eq('id', uid ?? '')
-          .maybeSingle();
-      debugPrint('[DEBUG] Self row via RLS: $selfCheck');
-      // ── END TEMP DEBUG ──
-
-      final response = await Supabase.instance.client
-          .from('users')
-          .select()
-          .order('created_at', ascending: false);
-
-      // ── TEMP DEBUG ──
-      debugPrint('[DEBUG] Full users response count: ${(response as List).length}');
-      debugPrint('[DEBUG] Full users response: $response');
-      // ── END TEMP DEBUG ──
-
-      List<AppUser> users = (response as List)
-          .map((row) => AppUser.fromJson(row as Map<String, dynamic>))
+      List<AppUser> users = rawUsers
+          .map((row) => AppUser.fromJson(row))
           .toList();
 
-      final existingIds = users.map((u) => u.id).toSet();
-
-      try {
-        final txns = await Supabase.instance.client
-            .from('transactions')
-            .select('created_by, users:created_by(full_name)');
-        for (final row in (txns as List)) {
-          final cId = row['created_by']?.toString();
-          if (cId != null && cId.isNotEmpty && !existingIds.contains(cId)) {
-            String name = 'Staff User';
-            if (row['users'] != null &&
-                row['users'] is Map &&
-                row['users']['full_name'] != null) {
-              name = row['users']['full_name'].toString();
-            }
-            users.add(AppUser(
-              id: cId,
-              fullName: name,
-              email: 'staff@hardware.com',
-              role: 'Staff',
-            ));
-            existingIds.add(cId);
-          }
+      final current = FirebaseAuth.instance.currentUser;
+      if (current != null) {
+        final currentRole = await AuthService.instance.fetchUserRole();
+        final idx = users.indexWhere((u) => u.id == current.uid);
+        if (idx >= 0) {
+          users[idx] = AppUser(
+            id: current.uid,
+            fullName: users[idx].fullName.isNotEmpty
+                ? users[idx].fullName
+                : AuthService.instance.displayName,
+            email: current.email ?? users[idx].email,
+            role: currentRole,
+            createdAt: users[idx].createdAt,
+          );
+        } else {
+          users.insert(
+            0,
+            AppUser(
+              id: current.uid,
+              fullName: AuthService.instance.displayName,
+              email: AuthService.instance.email,
+              role: currentRole,
+            ),
+          );
         }
-      } catch (e) {
-        debugPrint('[SettingsScreen] Txn user discover fallback: $e');
+        // Pin current user to the top
+        users.sort((a, b) {
+          if (a.id == current.uid) return -1;
+          if (b.id == current.uid) return 1;
+          return 0;
+        });
       }
 
-      final current = AuthService.instance.currentUser;
-        if (current != null) {
-          final currentRole = await AuthService.instance.fetchUserRole();
-          final idx = users.indexWhere((u) => u.id == current.id);
-          if (idx >= 0) {
-            users[idx] = AppUser(
-              id: current.id,
-              fullName: users[idx].fullName.isNotEmpty
-                  ? users[idx].fullName
-                  : AuthService.instance.displayName,
-              email: current.email ?? users[idx].email,
-              role: currentRole,
-              createdAt: users[idx].createdAt,
-            );
-          } else {
-            users.insert(
-              0,
-              AppUser(
-                id: current.id,
-                fullName: AuthService.instance.displayName,
-                email: AuthService.instance.email,
-                role: currentRole,
-              ),
-            );
-          }
-        }
-
-        // ── ADD THIS: pin current user to the top ──
-        if (current != null) {
-          users.sort((a, b) {
-            if (a.id == current.id) return -1;
-            if (b.id == current.id) return 1;
-            return 0;
-          });
-        }
-        // ── END ADD ──
-
-        if (!mounted) return;
-        setState(() {
-          _team = users;
-          _loadingTeam = false;
-        });
+      if (!mounted) return;
+      setState(() {
+        _team = users;
+        _loadingTeam = false;
+      });
     } catch (e) {
-      debugPrint('[DEBUG] _loadTeam outer catch fired: $e'); // ADD THIS TOO
-      final current = AuthService.instance.currentUser;
+      debugPrint('[SettingsScreen] _loadTeam error: $e');
+      final current = FirebaseAuth.instance.currentUser;
       List<AppUser> fallback = [];
       if (current != null) {
         final currentRole = AuthService.instance.userRole ?? 'Staff';
         fallback.add(AppUser(
-          id: current.id,
+          id: current.uid,
           fullName: AuthService.instance.displayName,
           email: AuthService.instance.email,
           role: currentRole,

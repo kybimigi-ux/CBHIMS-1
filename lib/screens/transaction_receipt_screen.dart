@@ -44,7 +44,7 @@ String _formatNum(num? val) {
 class _TransactionReceiptScreenState extends State<TransactionReceiptScreen> {
   late Transaction transaction;
   bool _loadingItems = true;
-  Map<int, double> _productBalances = {};
+  Map<String, double> _productBalances = {};
 
   // Pre-cached assets for fast PDF generation
   pw.MemoryImage? _cachedLogoImage;
@@ -89,7 +89,7 @@ class _TransactionReceiptScreenState extends State<TransactionReceiptScreen> {
   }
 
   Future<void> _loadProductBalances() async {
-    final balances = <int, double>{};
+    final balances = <String, double>{};
     for (final item in transaction.items) {
       if (item.productId != null && !balances.containsKey(item.productId)) {
         try {

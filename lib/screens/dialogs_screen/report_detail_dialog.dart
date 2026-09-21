@@ -64,7 +64,7 @@ class _ReportDetailDialogState extends State<ReportDetailDialog> {
   String? _error;
 
   final TextEditingController _itemSearchController = TextEditingController();
-  final Set<int> _selectedProductIds = <int>{};
+  final Set<String> _selectedProductIds = <String>{};
 
   final DateFormat _dateFormat = DateFormat('MMM dd, yyyy');
 

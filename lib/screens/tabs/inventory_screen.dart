@@ -163,10 +163,8 @@ class _InventoryScreenState extends State<InventoryScreen> {
             b.productName.toLowerCase().compareTo(a.productName.toLowerCase()));
         break;
       case ProductSort.recentlyAdded:
-        // Assumes higher id == more recently added (auto-incrementing id).
-        // Swap this out for a createdAt comparison if the Product model
-        // exposes a timestamp field.
-        filtered.sort((a, b) => (b.id ?? 0).compareTo(a.id ?? 0));
+        // Sort by createdAt desc; Firestore doc IDs are not sortable by creation order.
+        filtered.sort((a, b) => (b.createdAt ?? DateTime(1970)).compareTo(a.createdAt ?? DateTime(1970)));
         break;
     }
 
