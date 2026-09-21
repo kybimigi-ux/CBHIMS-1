@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../theme/app_theme.dart';
 import '../../services/auth_service.dart';
 import 'signup_screen.dart';
@@ -60,12 +60,35 @@ class _LoginScreenState extends State<LoginScreen>
       );
       // AuthGate handles navigation — including routing to
       // PendingApprovalScreen if the role is still null.
-    } on AuthException catch (e) {
+    } on FirebaseAuthException catch (e) {
       if (!mounted) return;
+      debugPrint('[SignIn] FirebaseAuthException: ${e.code} - ${e.message}');
+      String msg;
+      switch (e.code) {
+        case 'user-not-found':
+          msg = 'No account found with this email. Please register first.';
+          break;
+        case 'wrong-password':
+        case 'invalid-credential':
+          msg = 'Incorrect email or password. Please try again.';
+          break;
+        case 'user-disabled':
+          msg = 'This account has been disabled.';
+          break;
+        case 'operation-not-allowed':
+          msg = 'Email/Password sign-in is disabled in Firebase Console.';
+          break;
+        case 'invalid-email':
+          msg = 'The email address is invalid.';
+          break;
+        default:
+          msg = e.message ?? 'Sign in failed (${e.code}). Please try again.';
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(e.message),
+          content: Text(msg),
           backgroundColor: AppColors.danger,
+          duration: const Duration(seconds: 6),
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
@@ -82,10 +105,12 @@ class _LoginScreenState extends State<LoginScreen>
       );
     } catch (e) {
       if (!mounted) return;
+      debugPrint('[SignIn] Unexpected error: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('An unexpected error occurred. Please try again.'),
+          content: Text('Sign in error: $e'),
           backgroundColor: AppColors.danger,
+          duration: const Duration(seconds: 6),
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),

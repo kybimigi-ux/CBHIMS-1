@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../theme/app_theme.dart';
 import '../../services/auth_service.dart';
 
@@ -64,24 +64,44 @@ class _SignupScreenState extends State<SignupScreen>
       );
       if (!mounted) return;
 
-      // Show success and return to login
+      final isAdmin = AuthService.instance.isAdmin;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content:
-              const Text('Account created! An admin must approve your access before you can sign in.'),
+          content: Text(isAdmin
+              ? 'Admin account created successfully! Welcome!'
+              : 'Account created! An admin must approve your access before you can sign in.'),
           backgroundColor: AppColors.success,
           behavior: SnackBarBehavior.floating,
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
       );
-      Navigator.of(context).pop(); // Back to LoginScreen
-    } on AuthException catch (e) {
+      Navigator.of(context).pop(); // Back to LoginScreen / AuthGate
+    } on FirebaseAuthException catch (e) {
       if (!mounted) return;
+      debugPrint('[SignUp] FirebaseAuthException: ${e.code} - ${e.message}');
+      String msg;
+      switch (e.code) {
+        case 'operation-not-allowed':
+          msg = 'Email/Password sign-in is disabled in Firebase Console. Please go to Firebase Console -> Authentication -> Sign-in method and enable Email/Password.';
+          break;
+        case 'email-already-in-use':
+          msg = 'An account already exists with this email address. Please sign in instead.';
+          break;
+        case 'invalid-email':
+          msg = 'The email address is invalid. Please check and try again.';
+          break;
+        case 'weak-password':
+          msg = 'Password is too weak. Please use at least 6 characters.';
+          break;
+        default:
+          msg = e.message ?? 'Sign up failed (${e.code}). Please try again.';
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(e.message),
+          content: Text(msg),
           backgroundColor: AppColors.danger,
+          duration: const Duration(seconds: 8),
           behavior: SnackBarBehavior.floating,
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -101,11 +121,12 @@ class _SignupScreenState extends State<SignupScreen>
       );
     } catch (e) {
       if (!mounted) return;
+      debugPrint('[SignUp] Unexpected error: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content:
-              const Text('An unexpected error occurred. Please try again.'),
+          content: Text('Registration error: $e'),
           backgroundColor: AppColors.danger,
+          duration: const Duration(seconds: 8),
           behavior: SnackBarBehavior.floating,
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),

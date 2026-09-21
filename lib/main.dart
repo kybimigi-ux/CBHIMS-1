@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
 import 'screens/auth_gate.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
 import 'services/connectivity_service.dart';
@@ -13,23 +13,9 @@ import 'services/sync_service.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  String loadedUrl = '(not loaded yet)';
-  String loadedKeyPreview = '(not loaded yet)';
-
   try {
-    await dotenv.load(fileName: ".env");
-
-    loadedUrl = dotenv.env['SUPABASE_URL'] ?? '(NULL - key not found)';
-    final key = dotenv.env['SUPABASE_ANON_KEY'] ?? '';
-    loadedKeyPreview = key.isEmpty
-        ? '(NULL - key not found)'
-        : '${key.substring(0, key.length > 12 ? 12 : key.length)}...';
-
-    debugPrint('LOADED URL: [$loadedUrl]');
-
-    await Supabase.initialize(
-      url: (dotenv.env['SUPABASE_URL'] ?? '').trim(),
-      publishableKey: (dotenv.env['SUPABASE_ANON_KEY'] ?? '').trim(),
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
     );
 
     await SettingsService.instance.init();
@@ -64,11 +50,12 @@ void main() async {
                   textAlign: TextAlign.center,
                   style: const TextStyle(color: Colors.red, fontSize: 16),
                 ),
-                const SizedBox(height: 24),
-                Text(
-                  'DEBUG INFO\nURL: $loadedUrl\nKey starts with: $loadedKeyPreview',
+                const SizedBox(height: 16),
+                const Text(
+                  'Make sure firebase_options.dart is generated.\n'
+                  'Run: flutterfire configure',
                   textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.black87, fontSize: 13),
+                  style: TextStyle(color: Colors.black54, fontSize: 13),
                 ),
               ],
             ),

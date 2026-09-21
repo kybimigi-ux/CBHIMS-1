@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'auth_screen/login_screen.dart';
 import 'auth_screen/pending_approval_screen.dart';
 import 'main_layout_screen.dart';
@@ -22,8 +22,8 @@ class _AuthGateState extends State<AuthGate> {
   }
 
   Future<void> _checkExistingSession() async {
-    final session = Supabase.instance.client.auth.currentSession;
-    if (session != null) {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
       await AuthService.instance.fetchUserRole();
     }
     if (mounted) {
@@ -46,23 +46,33 @@ class _AuthGateState extends State<AuthGate> {
       );
     }
 
-    return ListenableBuilder(
-      listenable: AuthService.instance,
-      builder: (context, _) {
-        final session = Supabase.instance.client.auth.currentSession;
-
-        if (session == null || AuthService.instance.currentUser == null) {
-          return const LoginScreen();
-        }
-
-        if (AuthService.instance.isRoleLoading &&
-            AuthService.instance.userRole == null) {
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
           );
         }
 
-        return _resolveHome();
+        final user = snapshot.data;
+
+        if (user == null) {
+          return const LoginScreen();
+        }
+
+        return ListenableBuilder(
+          listenable: AuthService.instance,
+          builder: (context, _) {
+            if (AuthService.instance.isRoleLoading &&
+                AuthService.instance.userRole == null) {
+              return const Scaffold(
+                body: Center(child: CircularProgressIndicator()),
+              );
+            }
+            return _resolveHome();
+          },
+        );
       },
     );
   }

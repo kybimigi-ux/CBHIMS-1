@@ -15,14 +15,6 @@ class PendingApprovalScreen extends StatefulWidget {
 
 class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
   @override
-  void initState() {
-    super.initState();
-    // Kill the session immediately — this screen's only job is to
-    // explain why access was denied, not to hold a live session open.
-    AuthService.instance.signOut();
-  }
-
-  @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
@@ -97,8 +89,8 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
                       width: double.infinity,
                       height: 48,
                       child: ElevatedButton(
-                        onPressed: () {
-                          Navigator.of(context).popUntil((r) => r.isFirst);
+                        onPressed: () async {
+                          await AuthService.instance.signOut();
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.primary,
