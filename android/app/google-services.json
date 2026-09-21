@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "485376123476",
+    "project_id": "stokado-639d8",
+    "storage_bucket": "stokado-639d8.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:485376123476:android:dcd40fccd0291eb31903c1",
+        "android_client_info": {
+          "package_name": "com.example.test_flutter"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAREFIBDh8hPJtNp_TvGeX9J4Wbjs4qHqU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
