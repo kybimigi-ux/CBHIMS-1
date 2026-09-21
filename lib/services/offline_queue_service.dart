@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../models/pending_transaction.dart';
 
-/// Persists transactions that couldn't be sent to Supabase (offline or
+/// Persists transactions that couldn't be sent to Firebase (offline or
 /// a network error) so they can be retried later.
 ///
 /// Backed by a single Hive box of raw maps, keyed by [PendingTransaction.localId].

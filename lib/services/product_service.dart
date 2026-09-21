@@ -1,13 +1,11 @@
 import 'package:flutter/foundation.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/product.dart';
 
 /// Thrown when an outbound (or other decreasing) quantity change would
-/// take a product's stock below zero. Callers should catch this and show
-/// the user a clear "not enough stock" message rather than letting the
-/// transaction silently go through with clamped/incorrect quantities.
+/// take a product's stock below zero.
 class InsufficientStockException implements Exception {
-  final int productId;
+  final String productId;
   InsufficientStockException(this.productId);
 
   @override
@@ -15,169 +13,112 @@ class InsufficientStockException implements Exception {
       'InsufficientStockException: not enough stock for product $productId';
 }
 
-/// Service for all product-related Supabase operations.
+/// Service for all product-related Firestore operations.
 class ProductService {
   ProductService._();
   static final ProductService instance = ProductService._();
 
-  final SupabaseClient _client = Supabase.instance.client;
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  CollectionReference get _products => _db.collection('products');
 
-  /// Fetch all active products, joined with their category name.
+  /// Fetch all active products, ordered by name.
   Future<List<Product>> getAll() async {
-    final response = await _client
-        .from('products')
-        .select()
-        .eq('is_active', true)
-        .order('product_name');
-    return (response as List)
-        .map((row) => Product.fromJson(row as Map<String, dynamic>))
-        .toList();
+    final snap = await _products
+        .where('is_active', isEqualTo: true)
+        .orderBy('product_name')
+        .get();
+    return snap.docs.map((doc) => Product.fromFirestore(doc)).toList();
   }
 
-  /// Fetch a single product by ID.
-  Future<Product?> getById(int id) async {
-    final row = await _client
-        .from('products')
-        .select()
-        .eq('id', id)
-        .maybeSingle();
-    if (row == null) return null;
-    return Product.fromJson(row);
+  /// Fetch a single product by its Firestore document ID.
+  Future<Product?> getById(String id) async {
+    final doc = await _products.doc(id).get();
+    if (!doc.exists) return null;
+    return Product.fromFirestore(doc);
   }
 
-  /// Search products by name.
+  /// Search products by name (client-side filter since Firestore doesn't support ILIKE).
   Future<List<Product>> search(String query) async {
-    final response = await _client
-        .from('products')
-        .select()
-        .eq('is_active', true)
-        .ilike('product_name', '%$query%')
-        .order('product_name');
-    return (response as List)
-        .map((row) => Product.fromJson(row as Map<String, dynamic>))
+    final snap = await _products
+        .where('is_active', isEqualTo: true)
+        .orderBy('product_name')
+        .get();
+    final lower = query.toLowerCase();
+    return snap.docs
+        .map((doc) => Product.fromFirestore(doc))
+        .where((p) => p.productName.toLowerCase().contains(lower))
         .toList();
   }
 
-  /// Insert a new product into Supabase.
+  /// Insert a new product into Firestore.
   Future<Product> add(Product product) async {
-    final insertData = product.toInsertJson();
+    final data = product.toInsertJson();
+    final ref = await _products.add(data);
+    final doc = await ref.get();
+    return Product.fromFirestore(doc);
+  }
+
+  /// Update an existing product by document ID.
+  Future<void> update(String id, Map<String, dynamic> data) async {
+    final cleanData = Map<String, dynamic>.from(data)
+      ..remove('id')
+      ..remove('created_at');
     try {
-      final response = await _client
-          .from('products')
-          .insert(insertData)
-          .select()
-          .single();
-      return Product.fromJson(response);
+      await _products.doc(id).update(cleanData);
     } catch (e) {
-      debugPrint('[ProductService] add failed with payload $insertData: $e');
-      if (insertData.containsKey('category_id')) {
-        insertData.remove('category_id');
-        final response = await _client
-            .from('products')
-            .insert(insertData)
-            .select()
-            .single();
-        return Product.fromJson(response);
-      }
+      debugPrint('[ProductService] update failed for $id: $e');
       rethrow;
     }
   }
 
-  /// Update an existing product.
-  Future<void> update(int id, Map<String, dynamic> data) async {
-    final cleanData = Map<String, dynamic>.from(data);
-    cleanData.removeWhere((key, value) => value == null && key == 'category_id');
-    try {
-      await _client.from('products').update(cleanData).eq('id', id);
-    } catch (e) {
-      debugPrint('[ProductService] update failed with payload $cleanData: $e');
-      if (cleanData.containsKey('category_id')) {
-        cleanData.remove('category_id');
-        await _client.from('products').update(cleanData).eq('id', id);
-      } else {
-        rethrow;
-      }
-    }
-  }
-
   /// Soft-delete a product (set is_active = false).
-  Future<void> delete(int id) async {
-    await _client.from('products').update({'is_active': false}).eq('id', id);
+  Future<void> delete(String id) async {
+    await _products.doc(id).update({'is_active': false});
   }
 
-  /// Fetch current stock for a single product. Used to pre-check outbound
-  /// quantities in the UI before submitting, so the user gets an immediate
-  /// "not enough stock" message instead of waiting for the transaction to
-  /// fail server-side. This is a courtesy check only — it is NOT what
-  /// prevents overselling; adjust_product_quantity() is (see below).
-  Future<double> getCurrentQuantity(int id) async {
-    final row = await _client
-        .from('products')
-        .select('quantity')
-        .eq('id', id)
-        .single();
-    final q = row['quantity'];
+  /// Fetch current stock for a single product.
+  Future<double> getCurrentQuantity(String id) async {
+    final doc = await _products.doc(id).get();
+    final q = (doc.data() as Map<String, dynamic>?)?['quantity'];
     if (q is num) return q.toDouble();
     if (q is String) return double.tryParse(q.replaceAll(',', '.')) ?? 0.0;
     return 0.0;
   }
 
-  /// Atomically adjusts product quantity and refuses to let it go
-  /// negative. Uses a Postgres function (adjust_product_quantity) so the
-  /// check-and-decrement happens as a single atomic operation — this
-  /// closes both the "silently clamps to 0 instead of rejecting" bug and
-  /// the race condition where two concurrent outbound transactions could
-  /// both pass a client-side check before either one's update lands.
-  ///
-  /// Throws [InsufficientStockException] if quantityChange would take
-  /// stock below zero (e.g. issuing more than what's in stock). Positive
-  /// quantityChange (inbound) always succeeds.
-  Future<void> updateQuantity(int id, double quantityChange) async {
-    try {
-      await _client.rpc('adjust_product_quantity', params: {
-        'p_product_id': id,
-        'p_quantity_change': quantityChange,
-      });
-    } on PostgrestException catch (e) {
-      if (e.message.contains('INSUFFICIENT_STOCK') || e.code == 'P0001') {
-        throw InsufficientStockException(id);
-      }
-      // If RPC is missing from database schema, fallback to direct query + update
-      debugPrint('[ProductService] RPC adjust_product_quantity failed, fallback to direct update: $e');
-      final current = await getCurrentQuantity(id);
+  /// Atomically adjusts product quantity using a Firestore Transaction.
+  /// Throws [InsufficientStockException] if the result would go below zero.
+  Future<void> updateQuantity(String id, double quantityChange) async {
+    final docRef = _products.doc(id);
+    await _db.runTransaction((txn) async {
+      final snapshot = await txn.get(docRef);
+      final data = snapshot.data() as Map<String, dynamic>?;
+      final current = () {
+        final q = data?['quantity'];
+        if (q is num) return q.toDouble();
+        if (q is String) return double.tryParse(q.replaceAll(',', '.')) ?? 0.0;
+        return 0.0;
+      }();
       final newQty = current + quantityChange;
-      if (newQty < 0) {
-        throw InsufficientStockException(id);
-      }
-      await _client.from('products').update({'quantity': newQty}).eq('id', id);
-    } catch (e) {
-      debugPrint('[ProductService] updateQuantity error, fallback to direct update: $e');
-      final current = await getCurrentQuantity(id);
-      final newQty = current + quantityChange;
-      if (newQty < 0) {
-        throw InsufficientStockException(id);
-      }
-      await _client.from('products').update({'quantity': newQty}).eq('id', id);
-    }
+      if (newQty < 0) throw InsufficientStockException(id);
+      txn.update(docRef, {'quantity': newQty});
+    });
   }
 
-  /// Get total product count.
+  /// Get total active product count.
   Future<int> getTotalCount() async {
-    final response = await _client
-        .from('products')
-        .select('id')
-        .eq('is_active', true);
-    return (response as List).length;
+    final snap =
+        await _products.where('is_active', isEqualTo: true).count().get();
+    return snap.count ?? 0;
   }
 
-  /// Get count of low-stock products (quantity <= 10).
+  /// Get count of low-stock products (quantity <= 10 and > 0).
   Future<int> getLowStockCount() async {
-    final response = await _client
-        .from('products')
-        .select('id')
-        .eq('is_active', true)
-        .lte('quantity', 10)
-        .gt('quantity', 0);
-    return (response as List).length;
+    final snap = await _products
+        .where('is_active', isEqualTo: true)
+        .where('quantity', isLessThanOrEqualTo: 10)
+        .where('quantity', isGreaterThan: 0)
+        .count()
+        .get();
+    return snap.count ?? 0;
   }
 }

@@ -16,7 +16,7 @@ class ConnectivityService {
 
   /// True/false stream — emits whenever connectivity status changes.
   /// Note: this reflects "has a network interface", not "can actually
-  /// reach Supabase" (see isTrulyOnline for that).
+  /// reach Firebase" (see isTrulyOnline for that).
   Stream<bool> get onOnlineStatusChanged => _onlineController.stream;
 
   bool _lastKnownOnline = true;
@@ -44,8 +44,8 @@ class ConnectivityService {
 
   /// A device can report "online" (Wi-Fi connected) while still having no
   /// real route to the internet (e.g. captive portal, router with no
-  /// upstream). This does a cheap real reachability check by hitting
-  /// Supabase's own host. Use this right before a sync attempt, not on
+  /// upstream). This does a cheap real reachability check.
+  /// Use this right before a sync attempt, not on
   /// every keystroke — it's a real network call.
   Future<bool> isTrulyOnline(String healthCheckUrl) async {
     if (!_lastKnownOnline) return false;
