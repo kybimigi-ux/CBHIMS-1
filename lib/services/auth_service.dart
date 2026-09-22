@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class PendingApprovalException implements Exception {
   @override
@@ -16,6 +17,20 @@ class AuthService extends ChangeNotifier {
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _db = FirebaseFirestore.instance;
+
+  static const _kSessionLoginTime = 'auth_session_login_time';
+  static const _kCachedRole = 'auth_cached_role';
+
+  /// Initialize session & persistence settings (e.g. on web)
+  Future<void> init() async {
+    if (kIsWeb) {
+      try {
+        await _auth.setPersistence(Persistence.LOCAL);
+      } catch (e) {
+        debugPrint('[AuthService] setPersistence error: $e');
+      }
+    }
+  }
 
   // ---------------------------------------------------------------------------
   // Reactive session stream
@@ -57,6 +72,42 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Checks if the session is still within the 1-week (7-day) limit.
+  /// If older than 7 days, signs out the user and returns false.
+  /// Otherwise, keeps the user signed in and returns true.
+  Future<bool> checkSessionValidity() async {
+    final user = currentUser;
+    if (user == null) return false;
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final loginTimeMs = prefs.getInt(_kSessionLoginTime);
+
+      if (loginTimeMs == null) {
+        // Record current timestamp for existing sessions without a timestamp
+        await prefs.setInt(
+            _kSessionLoginTime, DateTime.now().millisecondsSinceEpoch);
+        return true;
+      }
+
+      final loginDate = DateTime.fromMillisecondsSinceEpoch(loginTimeMs);
+      final difference = DateTime.now().difference(loginDate);
+
+      // 1-week session lifespan limit: 7 days
+      if (difference.inDays >= 7) {
+        debugPrint(
+            '[AuthService] 1-week session expired (${difference.inDays} days old). Signing out.');
+        await signOut();
+        return false;
+      }
+
+      return true;
+    } catch (e) {
+      debugPrint('[AuthService] checkSessionValidity error: $e');
+      return true;
+    }
+  }
+
   /// Fetch user role from the `users` Firestore collection.
   Future<String?> fetchUserRole({bool forceRefresh = false}) async {
     final uid = userId;
@@ -66,6 +117,18 @@ class AuthService extends ChangeNotifier {
     }
 
     if (!forceRefresh && _cachedRole != null) return _cachedRole;
+
+    // Load from local preferences first to avoid flicker or premature pending screen
+    if (!forceRefresh && _cachedRole == null) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final local = prefs.getString(_kCachedRole);
+        if (local != null && local.isNotEmpty) {
+          _cachedRole = local;
+        }
+      } catch (_) {}
+    }
+
     if (_roleFetchFuture != null) return _roleFetchFuture!;
 
     _roleFetchFuture = _doFetchUserRole(uid);
@@ -93,13 +156,23 @@ class AuthService extends ChangeNotifier {
         _cachedRole = r.isNotEmpty
             ? r[0].toUpperCase() + r.substring(1).toLowerCase()
             : null;
+        if (_cachedRole != null) {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString(_kCachedRole, _cachedRole!);
+        }
       } else {
         _cachedRole = null;
         debugPrint('[AuthService] uid=$uid has no approved role yet');
       }
     } catch (e) {
       debugPrint('[AuthService] Could not fetch user role: $e');
-      _cachedRole = null;
+      // If we already had a cached role from SharedPreferences, keep it!
+      if (_cachedRole == null) {
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          _cachedRole = prefs.getString(_kCachedRole);
+        } catch (_) {}
+      }
     } finally {
       _isRoleLoading = false;
       notifyListeners();
@@ -129,6 +202,10 @@ class AuthService extends ChangeNotifier {
     if (targetUserId == userId) {
       _cachedRole =
           formattedRole[0].toUpperCase() + formattedRole.substring(1);
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(_kCachedRole, _cachedRole!);
+      } catch (_) {}
       notifyListeners();
     }
   }
@@ -188,7 +265,8 @@ class AuthService extends ChangeNotifier {
         final existingUsers = await _db.collection('users').limit(1).get();
         if (existingUsers.docs.isEmpty) {
           assignedRole = 'admin';
-          debugPrint('[AuthService] First user registered -> automatically assigning Admin role.');
+          debugPrint(
+              '[AuthService] First user registered -> automatically assigning Admin role.');
         }
       } catch (e) {
         debugPrint('[AuthService] Could not check existing users count: $e');
@@ -204,6 +282,12 @@ class AuthService extends ChangeNotifier {
         });
         if (assignedRole != null) {
           _cachedRole = 'Admin';
+          try {
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setInt(
+                _kSessionLoginTime, DateTime.now().millisecondsSinceEpoch);
+            await prefs.setString(_kCachedRole, 'Admin');
+          } catch (_) {}
         }
       } catch (e) {
         debugPrint('[AuthService] Failed to create user document: $e');
@@ -234,7 +318,12 @@ class AuthService extends ChangeNotifier {
         .timeout(const Duration(seconds: 10));
 
     if (credential.user != null) {
-      await fetchUserRole();
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setInt(
+            _kSessionLoginTime, DateTime.now().millisecondsSinceEpoch);
+      } catch (_) {}
+      await fetchUserRole(forceRefresh: true);
     }
 
     return credential;
@@ -242,6 +331,11 @@ class AuthService extends ChangeNotifier {
 
   /// End the current session.
   Future<void> signOut() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_kSessionLoginTime);
+      await prefs.remove(_kCachedRole);
+    } catch (_) {}
     try {
       await _auth.signOut().timeout(const Duration(seconds: 5));
     } catch (e) {

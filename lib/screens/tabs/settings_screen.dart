@@ -469,18 +469,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('User Management', style: AppTextStyles.h3),
-                  const SizedBox(height: 4),
-                  Text(
-                      _loadingTeam
-                          ? 'Loading team...'
-                          : '${_team.length} team member(s) registered.',
-                      style: AppTextStyles.caption),
-                ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('User Management', style: AppTextStyles.h3),
+                    const SizedBox(height: 4),
+                    Text(
+                        _loadingTeam
+                            ? 'Loading team...'
+                            : '${_team.length} team member(s) registered.',
+                        style: AppTextStyles.caption),
+                  ],
+                ),
               ),
+              const SizedBox(width: AppSpacing.sm),
               PrimaryButton(
                 label: 'Refresh',
                 icon: Icons.refresh_rounded,

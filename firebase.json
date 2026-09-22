@@ -1,1 +1,27 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"stokado-639d8","appId":"1:485376123476:android:dcd40fccd0291eb31903c1","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"stokado-639d8","configurations":{"android":"1:485376123476:android:dcd40fccd0291eb31903c1","ios":"1:485376123476:ios:851d8889062d16c41903c1","web":"1:485376123476:web:c22283fff2577b3f1903c1","windows":"1:485376123476:web:3e2593a27aba92c21903c1"}}}}}}
+{
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "stokado-639d8",
+          "appId": "1:485376123476:android:dcd40fccd0291eb31903c1",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "stokado-639d8",
+          "configurations": {
+            "android": "1:485376123476:android:dcd40fccd0291eb31903c1",
+            "ios": "1:485376123476:ios:851d8889062d16c41903c1",
+            "web": "1:485376123476:web:c22283fff2577b3f1903c1",
+            "windows": "1:485376123476:web:3e2593a27aba92c21903c1"
+          }
+        }
+      }
+    }
+  }
+}
