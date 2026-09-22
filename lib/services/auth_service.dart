@@ -149,7 +149,7 @@ class AuthService extends ChangeNotifier {
           .collection('users')
           .doc(uid)
           .get()
-          .timeout(const Duration(seconds: 8));
+          .timeout(const Duration(seconds: 15));
 
       if (doc.exists && doc.data()?['role'] != null) {
         final r = doc.data()!['role'].toString().trim();
@@ -161,17 +161,31 @@ class AuthService extends ChangeNotifier {
           await prefs.setString(_kCachedRole, _cachedRole!);
         }
       } else {
-        _cachedRole = null;
-        debugPrint('[AuthService] uid=$uid has no approved role yet');
+        // Fallback for demo accounts if user doc creation was delayed
+        if (currentUser?.email == _demoAdminEmail) {
+          _cachedRole = 'Admin';
+        } else if (currentUser?.email == _demoStaffEmail) {
+          _cachedRole = 'Staff';
+        } else {
+          _cachedRole = null;
+          debugPrint('[AuthService] uid=$uid has no approved role yet');
+        }
       }
     } catch (e) {
       debugPrint('[AuthService] Could not fetch user role: $e');
-      // If we already had a cached role from SharedPreferences, keep it!
+      // Fallback to local cache or demo role
       if (_cachedRole == null) {
         try {
           final prefs = await SharedPreferences.getInstance();
           _cachedRole = prefs.getString(_kCachedRole);
         } catch (_) {}
+        if (_cachedRole == null) {
+          if (currentUser?.email == _demoAdminEmail) {
+            _cachedRole = 'Admin';
+          } else if (currentUser?.email == _demoStaffEmail) {
+            _cachedRole = 'Staff';
+          }
+        }
       }
     } finally {
       _isRoleLoading = false;
@@ -342,6 +356,64 @@ class AuthService extends ChangeNotifier {
       debugPrint('[AuthService] signOut error: $e');
     }
     _resetRole();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Demo Login
+  // ---------------------------------------------------------------------------
+
+  static const _demoAdminEmail = 'demo-admin@stokado.app';
+  static const _demoStaffEmail = 'demo-staff@stokado.app';
+  static const _demoAdminPassword = 'DemoAdmin123!';
+  static const _demoStaffPassword = 'DemoStaff123!';
+
+  /// Sign in as a demo account. Auto-creates the account if it doesn't exist.
+  Future<void> signInDemo({required String role}) async {
+    final email = role == 'admin' ? _demoAdminEmail : _demoStaffEmail;
+    final password = role == 'admin' ? _demoAdminPassword : _demoStaffPassword;
+    try {
+      await signIn(email: email, password: password);
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'user-not-found' ||
+          e.code == 'invalid-credential' ||
+          e.code == 'INVALID_LOGIN_CREDENTIALS') {
+        // Account doesn't exist yet — create it
+        await _createDemoAccount(email: email, password: password, role: role);
+      } else {
+        rethrow;
+      }
+    }
+  }
+
+  Future<void> _createDemoAccount({
+    required String email,
+    required String password,
+    required String role,
+  }) async {
+    _resetRole();
+    final credential = await _auth.createUserWithEmailAndPassword(
+        email: email, password: password);
+    final user = credential.user;
+    if (user == null) return;
+    final fullName = role == 'admin' ? 'Demo Admin' : 'Demo Staff';
+    try {
+      await user.updateDisplayName(fullName);
+    } catch (_) {}
+    await _db.collection('users').doc(user.uid).set({
+      'full_name': fullName,
+      'email': email,
+      'role': role,
+      'created_at': FieldValue.serverTimestamp(),
+      'is_demo': true,
+    });
+    _cachedRole = role == 'admin' ? 'Admin' : 'Staff';
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(
+          _kSessionLoginTime, DateTime.now().millisecondsSinceEpoch);
+      await prefs.setString(_kCachedRole, _cachedRole!);
+    } catch (_) {}
+    notifyListeners();
   }
 
   /// Fetch all users from Firestore (admin usage).

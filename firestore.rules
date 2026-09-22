@@ -122,5 +122,28 @@ service cloud.firestore {
         allow update, delete: if isAdmin();
       }
     }
+
+    // =========================================================================
+    // 4. Hardwares Collection (Workspaces)
+    // =========================================================================
+    // Schema: { name, description, createdBy, createdAt, memberIds, members, invitedEmails }
+    match /hardwares/{hardwareId} {
+      // Authenticated users can view hardwares (needed to query memberIds or invitedEmails).
+      allow read: if isAuthenticated();
+
+      // Authenticated users can create workspaces.
+      allow create: if isAuthenticated() && (
+        request.resource.data.createdBy == request.auth.uid
+      );
+
+      // Members can manage the workspace; invited users can join/accept invites.
+      allow update: if isAuthenticated();
+
+      // Only the creator or an Admin can delete a workspace.
+      allow delete: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid || isAdmin()
+      );
+    }
   }
 }
+

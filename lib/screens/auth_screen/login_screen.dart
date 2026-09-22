@@ -21,6 +21,8 @@ class _LoginScreenState extends State<LoginScreen>
   final _passwordController = TextEditingController();
   bool _loading = false;
   bool _obscurePassword = true;
+  bool _demoLoading = false;
+  String? _demoRole;
 
   late final AnimationController _fadeController;
   late final Animation<double> _fadeAnim;
@@ -121,6 +123,25 @@ class _LoginScreenState extends State<LoginScreen>
       );
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _handleDemoSignIn(String role) async {
+    setState(() { _demoLoading = true; _demoRole = role; });
+    try {
+      await AuthService.instance.signInDemo(role: role);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Demo sign-in failed: $e'),
+          backgroundColor: AppColors.danger,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() { _demoLoading = false; _demoRole = null; });
     }
   }
 
@@ -344,6 +365,69 @@ class _LoginScreenState extends State<LoginScreen>
                                   'Sign Up',
                                   style: AppTextStyles.bodyMedium.copyWith(
                                     color: AppColors.primary,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          const SizedBox(height: 28),
+
+                          // ── Demo Accounts ──
+                          Row(
+                            children: [
+                              const Expanded(child: Divider()),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 12),
+                                child: Text('Try Demo',
+                                    style: AppTextStyles.caption),
+                              ),
+                              const Expanded(child: Divider()),
+                            ],
+                          ),
+                          const SizedBox(height: 14),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: ElevatedButton.icon(
+                                  onPressed: (_loading || _demoLoading)
+                                      ? null
+                                      : () => _handleDemoSignIn('admin'),
+                                  icon: (_demoLoading && _demoRole == 'admin')
+                                      ? const SizedBox(width: 14, height: 14,
+                                          child: CircularProgressIndicator(strokeWidth: 2,
+                                              valueColor: AlwaysStoppedAnimation(Colors.white)))
+                                      : const Icon(Icons.admin_panel_settings_outlined, size: 16),
+                                  label: const Text('Demo Admin'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.primary,
+                                    foregroundColor: Colors.white,
+                                    elevation: 0,
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(10)),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: (_loading || _demoLoading)
+                                      ? null
+                                      : () => _handleDemoSignIn('staff'),
+                                  icon: (_demoLoading && _demoRole == 'staff')
+                                      ? const SizedBox(width: 14, height: 14,
+                                          child: CircularProgressIndicator(strokeWidth: 2,
+                                              valueColor: AlwaysStoppedAnimation(
+                                                  AppColors.primary)))
+                                      : const Icon(Icons.person_outline_rounded, size: 16),
+                                  label: const Text('Demo Staff'),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: AppColors.primary,
+                                    side: const BorderSide(color: AppColors.primary),
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(10)),
                                   ),
                                 ),
                               ),

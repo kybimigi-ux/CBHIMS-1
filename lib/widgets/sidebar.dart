@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../services/auth_service.dart';
+import '../services/hardware_context.dart';
+import '../services/hardware_service.dart';
+import '../screens/hardware_settings_screen.dart';
 
 class NavItem {
   final String label;
@@ -54,7 +57,8 @@ class Sidebar extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildBrand(),
+            _buildBrand(context),
+            _buildHardwareChip(context),
             const SizedBox(height: AppSpacing.md),
             Expanded(
               child: ListView.builder(
@@ -71,14 +75,15 @@ class Sidebar extends StatelessWidget {
                 },
               ),
             ),
-            _buildUserFooter(),
+            _buildSwitchHardwareButton(context),
+            _buildUserFooter(context),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildBrand() {
+  Widget _buildBrand(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
       child: Row(
@@ -102,7 +107,91 @@ class Sidebar extends StatelessWidget {
     );
   }
 
-  Widget _buildUserFooter() {
+  Widget _buildHardwareChip(BuildContext context) {
+    return ListenableBuilder(
+      listenable: HardwareContext.instance,
+      builder: (context, _) {
+        final hw = HardwareContext.instance.activeHardware;
+        if (hw == null) return const SizedBox.shrink();
+        final isAdmin = AuthService.instance.isAdmin;
+        return Container(
+          margin: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          decoration: BoxDecoration(
+            color: AppColors.primarySoft,
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+            border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.storefront_rounded,
+                  size: 15, color: AppColors.primary),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  hw.name,
+                  style: AppTextStyles.label
+                      .copyWith(color: AppColors.primary, fontSize: 11.5),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (isAdmin) ...[  
+                const SizedBox(width: 4),
+                GestureDetector(
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            _HardwareSettingsRouteWrapper(hardwareId: hw.id),
+                      ),
+                    );
+                  },
+                  child: const Icon(Icons.settings_outlined,
+                      size: 14, color: AppColors.primary),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSwitchHardwareButton(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          onTap: () {
+            HardwareContext.instance.clearActiveHardware();
+            Navigator.of(context).pop();
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.swap_horiz_rounded,
+                    size: 17, color: AppColors.textSecondary),
+                const SizedBox(width: 10),
+                Text('Switch Workspace',
+                    style: AppTextStyles.body
+                        .copyWith(color: AppColors.textSecondary, fontSize: 13.5)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildUserFooter(BuildContext context) {
     final auth = AuthService.instance;
     final name = auth.displayName;
     final email = auth.email;
@@ -157,6 +246,7 @@ class Sidebar extends StatelessWidget {
               PopupMenuButton<bool>(
                 onSelected: (val) async {
                   if (val == true) {
+                    HardwareContext.instance.clearActiveHardware();
                     await AuthService.instance.signOut();
                   }
                 },
@@ -235,6 +325,45 @@ class _NavTile extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Wrapper that re-fetches the hardware by ID and opens settings.
+/// Needed because the sidebar only has the hardware ID from context.
+class _HardwareSettingsRouteWrapper extends StatefulWidget {
+  final String hardwareId;
+  const _HardwareSettingsRouteWrapper({required this.hardwareId});
+
+  @override
+  State<_HardwareSettingsRouteWrapper> createState() =>
+      _HardwareSettingsRouteWrapperState();
+}
+
+class _HardwareSettingsRouteWrapperState
+    extends State<_HardwareSettingsRouteWrapper> {
+  @override
+  void initState() {
+    super.initState();
+    _open();
+  }
+
+  Future<void> _open() async {
+    final hw = await HardwareService.instance.getById(widget.hardwareId);
+    if (!mounted) return;
+    if (hw == null) {
+      Navigator.of(context).pop();
+      return;
+    }
+    await Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => HardwareSettingsScreen(hardware: hw)),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      body: Center(child: CircularProgressIndicator()),
     );
   }
 }

@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'auth_screen/login_screen.dart';
 import 'auth_screen/pending_approval_screen.dart';
-import 'main_layout_screen.dart';
+import 'hardware_lobby_screen.dart';
 import '../services/auth_service.dart';
+import '../services/hardware_context.dart';
 
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
@@ -35,7 +36,7 @@ class _AuthGateState extends State<AuthGate> {
     if (AuthService.instance.isPending) {
       return const PendingApprovalScreen();
     }
-    return const MainLayoutScreen();
+    return const HardwareLobbyScreen();
   }
 
   @override
@@ -58,6 +59,8 @@ class _AuthGateState extends State<AuthGate> {
         final user = snapshot.data;
 
         if (user == null) {
+          // Clear active hardware on logout
+          HardwareContext.instance.clearActiveHardware();
           return const LoginScreen();
         }
 
