@@ -253,7 +253,7 @@ class _ProductLedgerScreenState extends State<ProductLedgerScreen> {
                         crossAxisAlignment: pw.CrossAxisAlignment.start,
                         children: [
                           pw.Text(
-                            'Celis Brothers Hardware',
+                            'STOKADO',
                             style: const pw.TextStyle(
                               fontSize: 18,
                               fontWeight: pw.FontWeight.bold,

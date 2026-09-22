@@ -31,7 +31,13 @@ class SettingsService {
   // Getters (synchronous after init)
   // ---------------------------------------------------------------------------
 
-  String get appName => _prefs?.getString(_kAppName) ?? 'Celis Brothers Hardware - CBHIMS';
+  String get appName {
+    final val = _prefs?.getString(_kAppName);
+    if (val == null || val == 'Celis Brothers Hardware - CBHIMS') {
+      return 'STOKADO';
+    }
+    return val;
+  }
 
   bool get lowStockAlerts => _prefs?.getBool(_kLowStockAlerts) ?? true;
 

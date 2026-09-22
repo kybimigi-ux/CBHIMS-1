@@ -15,7 +15,6 @@ import '../widgets/buttons.dart';
 import '../widgets/notification_banner.dart';
 import '../widgets/pdf_preview_screen.dart';
 import '../widgets/status_badge.dart';
-import 'dialogs_screen/add_transaction_screen.dart';
 
 class TransactionReceiptScreen extends StatefulWidget {
   final Transaction transaction;
@@ -104,39 +103,6 @@ class _TransactionReceiptScreenState extends State<TransactionReceiptScreen> {
     _productBalances = balances;
   }
 
-  Future<void> _onEdit() async {
-    if (transaction.isPendingSync) {
-      NotificationBanner.show(
-        context,
-        'This transaction hasn\'t synced yet — it can\'t be edited until it\'s online.',
-        tone: NotificationTone.warning,
-      );
-      return;
-    }
-
-    try {
-      final fullTxn = transaction.id != null
-          ? await TransactionService.instance.getById(transaction.id!)
-          : transaction;
-      if (!mounted) return;
-
-      final updated = await AddTransactionScreen.showEdit(context, fullTxn);
-      if (updated == true && mounted) {
-        setState(() {
-          _loadingItems = true;
-        });
-        await _loadFullTransaction();
-      }
-    } catch (e) {
-      if (!mounted) return;
-      NotificationBanner.show(
-        context,
-        'Failed to load transaction for editing: $e',
-        tone: NotificationTone.error,
-      );
-    }
-  }
-
   Future<Uint8List> _buildPdfBytes(PdfPageFormat format) async {
     final pdf = pw.Document();
 
@@ -204,7 +170,7 @@ class _TransactionReceiptScreenState extends State<TransactionReceiptScreen> {
                         crossAxisAlignment: pw.CrossAxisAlignment.start,
                         children: [
                           pw.Text(
-                            'Celis Brothers Hardware',
+                            'STOKADO',
                             style: const pw.TextStyle(
                               fontSize: 20,
                               fontWeight: pw.FontWeight.bold,
@@ -370,11 +336,6 @@ class _TransactionReceiptScreenState extends State<TransactionReceiptScreen> {
                   onPressed: () => _sharePdf(context),
                 ),
                 IconButton(
-                  tooltip: 'Edit Transaction',
-                  icon: const Icon(Icons.edit_outlined, size: 20),
-                  onPressed: _onEdit,
-                ),
-                IconButton(
                   tooltip: 'Print / Download PDF',
                   icon: const Icon(Icons.print_rounded,
                       size: 20, color: AppColors.primary),
@@ -389,22 +350,6 @@ class _TransactionReceiptScreenState extends State<TransactionReceiptScreen> {
                     tooltip: 'Share PDF',
                     icon: const Icon(Icons.share_rounded, size: 20),
                     onPressed: () => _sharePdf(context),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: OutlinedButton.icon(
-                    onPressed: _onEdit,
-                    icon: const Icon(Icons.edit_outlined, size: 16),
-                    label: const Text('Edit'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.textPrimary,
-                      side: const BorderSide(color: AppColors.border),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 8),
-                    ),
                   ),
                 ),
                 Padding(
@@ -461,7 +406,7 @@ class _TransactionReceiptScreenState extends State<TransactionReceiptScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('Celis Brothers Hardware',
+                                Text('STOKADO',
                                     style: AppTextStyles.h2
                                         .copyWith(fontSize: 17)),
                                 const SizedBox(height: 2),
@@ -505,7 +450,7 @@ class _TransactionReceiptScreenState extends State<TransactionReceiptScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('Celis Brothers Hardware',
+                                Text('STOKADO',
                                     style: AppTextStyles.h1
                                         .copyWith(fontSize: 24)),
                                 const SizedBox(height: 2),
@@ -766,7 +711,7 @@ class _TransactionReceiptScreenState extends State<TransactionReceiptScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Flexible(
-                          child: Text('Official CBHIMS Stock Movement Record',
+                          child: Text('Official STOKADO Stock Movement Record',
                               style: AppTextStyles.caption,
                               overflow: TextOverflow.ellipsis),
                         ),

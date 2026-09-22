@@ -70,7 +70,7 @@ class ReportsScreen extends StatelessWidget {
         children: [
           const ScreenHeader(
             title: 'Reports',
-            subtitle: 'Generate, filter, and export official warehouse reports for Celis Brothers Hardware.',
+            subtitle: 'Generate, filter, and export official warehouse reports for STOKADO.',
           ),
           const SizedBox(height: AppSpacing.lg),
           _buildQuickExportBanner(context, compact),
@@ -138,7 +138,7 @@ class ReportsScreen extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'All exports include the Celis Brothers Hardware header, customizable date range, PDF print output, and CSV download.',
+              'All exports include the STOKADO header, customizable date range, PDF print output, and CSV download.',
               style: AppTextStyles.caption,
             ),
             const SizedBox(height: 14),
@@ -176,7 +176,7 @@ class ReportsScreen extends StatelessWidget {
                 Text('Generate Official Branded Reports', style: AppTextStyles.h3),
                 const SizedBox(height: 2),
                 Text(
-                  'All exports include the Celis Brothers Hardware header, customizable date range, PDF print output, and CSV download.',
+                  'All exports include the STOKADO header, customizable date range, PDF print output, and CSV download.',
                   style: AppTextStyles.caption,
                 ),
               ],

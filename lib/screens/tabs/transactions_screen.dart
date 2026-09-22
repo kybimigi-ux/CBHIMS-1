@@ -194,42 +194,6 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     }
   }
 
-  Future<void> _onEditTransaction(Transaction txn) async {
-    if (txn.isPendingSync) {
-      NotificationBanner.show(
-        context,
-        'This transaction hasn\'t synced yet — it can\'t be edited until it\'s online.',
-        tone: NotificationTone.warning,
-      );
-      return;
-    }
-    try {
-      final full = txn.id != null
-          ? await TransactionService.instance.getById(txn.id!)
-          : txn;
-      if (!mounted) return;
-      final updated = await AddTransactionScreen.showEdit(context, full);
-      if (updated == true && mounted) {
-        _loadTransactions();
-        final refreshed = txn.id != null
-            ? await TransactionService.instance.getById(txn.id!)
-            : full;
-        if (!mounted) return;
-        await TransactionReceiptScreen.navigateTo(context, refreshed);
-        if (mounted) {
-          _loadTransactions();
-        }
-      }
-    } catch (e) {
-      if (!mounted) return;
-      NotificationBanner.show(
-        context,
-        'Failed to load transaction for editing: $e',
-        tone: NotificationTone.error,
-      );
-    }
-  }
-
   Future<void> _onDeleteTransaction(Transaction txn) async {
     if (txn.isPendingSync) {
       if (txn.localId != null) {
@@ -730,29 +694,14 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                           ),
                         ),
                         if (_isAdmin)
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                onPressed: () => _onEditTransaction(t),
-                                icon: const Icon(Icons.edit_outlined,
-                                    size: 18, color: AppColors.primary),
-                                splashRadius: 18,
-                                tooltip: 'Edit Transaction',
-                                constraints: const BoxConstraints(),
-                                padding: const EdgeInsets.all(6),
-                              ),
-                              const SizedBox(width: 6),
-                              IconButton(
-                                onPressed: () => _onDeleteTransaction(t),
-                                icon: const Icon(Icons.delete_outline_rounded,
-                                    size: 18, color: AppColors.danger),
-                                splashRadius: 18,
-                                tooltip: 'Delete Transaction',
-                                constraints: const BoxConstraints(),
-                                padding: const EdgeInsets.all(6),
-                              ),
-                            ],
+                          IconButton(
+                            onPressed: () => _onDeleteTransaction(t),
+                            icon: const Icon(Icons.delete_outline_rounded,
+                                size: 18, color: AppColors.danger),
+                            splashRadius: 18,
+                            tooltip: 'Delete Transaction',
+                            constraints: const BoxConstraints(),
+                            padding: const EdgeInsets.all(6),
                           ),
                       ],
                     ),
@@ -791,7 +740,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                 child: Text('TOTAL ITEMS',
                     textAlign: TextAlign.right, style: AppTextStyles.label),
               ),
-              if (_isAdmin) const SizedBox(width: 84),
+              if (_isAdmin) const SizedBox(width: 48),
             ],
           ),
         ),
@@ -861,26 +810,16 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                     ),
                     if (_isAdmin)
                       SizedBox(
-                        width: 84,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            IconButton(
-                              onPressed: () => _onEditTransaction(t),
-                              icon: const Icon(Icons.edit_outlined,
-                                  size: 18, color: AppColors.primary),
-                              splashRadius: 18,
-                              tooltip: 'Edit Transaction',
-                            ),
-                            IconButton(
-                              onPressed: () => _onDeleteTransaction(t),
-                              icon: const Icon(Icons.delete_outline_rounded,
-                                  size: 19, color: AppColors.danger),
-                              splashRadius: 18,
-                              tooltip: 'Delete Transaction',
-                            ),
-                          ],
+                        width: 48,
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: IconButton(
+                            onPressed: () => _onDeleteTransaction(t),
+                            icon: const Icon(Icons.delete_outline_rounded,
+                                size: 19, color: AppColors.danger),
+                            splashRadius: 18,
+                            tooltip: 'Delete Transaction',
+                          ),
                         ),
                       ),
                   ],

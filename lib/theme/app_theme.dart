@@ -19,11 +19,11 @@ class AppColors {
   static const Color textMuted = Color(0xFFADB5BD);
 
   // Accents
-  static const Color primary = Color.fromARGB(255, 255, 73, 73);
+  static const Color primary = Color.fromARGB(255, 73, 164, 255);
   static const Color primarySoft = Color(0xFFEFF4FF);
   static const Color success = Color(0xFF16A34A);
   static const Color successSoft = Color(0xFFEBF9EF);
-  static const Color warning = Color(0xFFD97706);
+  static const Color warning = Color.fromARGB(255, 197, 217, 244);
   static const Color warningSoft = Color(0xFFFEF6E7);
   static const Color danger = Color(0xFFDC2626);
   static const Color dangerSoft = Color(0xFFFDECEC);
@@ -53,23 +53,51 @@ class AppTextStyles {
 
   static TextStyle get _base => GoogleFonts.inter(color: AppColors.textPrimary);
 
-  static TextStyle get h1 => _base.copyWith(fontSize: 28, fontWeight: FontWeight.w700, height: 1.2, letterSpacing: -0.5);
-  static TextStyle get h2 => _base.copyWith(fontSize: 22, fontWeight: FontWeight.w700, height: 1.25, letterSpacing: -0.3);
-  static TextStyle get h3 => _base.copyWith(fontSize: 18, fontWeight: FontWeight.w600, height: 1.3);
-  static TextStyle get bodyLarge => _base.copyWith(fontSize: 15, fontWeight: FontWeight.w500, height: 1.4);
-  static TextStyle get body => _base.copyWith(fontSize: 14, fontWeight: FontWeight.w400, height: 1.4);
-  static TextStyle get bodyMedium => _base.copyWith(fontSize: 14, fontWeight: FontWeight.w600, height: 1.4);
-  static TextStyle get caption => _base.copyWith(fontSize: 12.5, fontWeight: FontWeight.w500, color: AppColors.textSecondary, height: 1.3);
-  static TextStyle get label => _base.copyWith(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary, letterSpacing: 0.2);
-  static TextStyle get statValue => _base.copyWith(fontSize: 26, fontWeight: FontWeight.w700, letterSpacing: -0.5, height: 1.1);
-  static TextStyle get mono => GoogleFonts.robotoMono(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.textSecondary, height: 1.4);
+  static TextStyle get h1 => _base.copyWith(
+      fontSize: 28,
+      fontWeight: FontWeight.w700,
+      height: 1.2,
+      letterSpacing: -0.5);
+  static TextStyle get h2 => _base.copyWith(
+      fontSize: 22,
+      fontWeight: FontWeight.w700,
+      height: 1.25,
+      letterSpacing: -0.3);
+  static TextStyle get h3 =>
+      _base.copyWith(fontSize: 18, fontWeight: FontWeight.w600, height: 1.3);
+  static TextStyle get bodyLarge =>
+      _base.copyWith(fontSize: 15, fontWeight: FontWeight.w500, height: 1.4);
+  static TextStyle get body =>
+      _base.copyWith(fontSize: 14, fontWeight: FontWeight.w400, height: 1.4);
+  static TextStyle get bodyMedium =>
+      _base.copyWith(fontSize: 14, fontWeight: FontWeight.w600, height: 1.4);
+  static TextStyle get caption => _base.copyWith(
+      fontSize: 12.5,
+      fontWeight: FontWeight.w500,
+      color: AppColors.textSecondary,
+      height: 1.3);
+  static TextStyle get label => _base.copyWith(
+      fontSize: 12,
+      fontWeight: FontWeight.w600,
+      color: AppColors.textSecondary,
+      letterSpacing: 0.2);
+  static TextStyle get statValue => _base.copyWith(
+      fontSize: 26,
+      fontWeight: FontWeight.w700,
+      letterSpacing: -0.5,
+      height: 1.1);
+  static TextStyle get mono => GoogleFonts.robotoMono(
+      fontSize: 13,
+      fontWeight: FontWeight.w500,
+      color: AppColors.textSecondary,
+      height: 1.4);
 }
 
 ThemeData buildAppTheme() {
   final colorScheme = ColorScheme.fromSeed(
     seedColor: AppColors.primary,
     primary: AppColors.primary,
-    surface: AppColors.surface,
+    surface: const Color.fromARGB(255, 203, 245, 255),
     error: AppColors.danger,
     brightness: Brightness.light,
   ).copyWith(

@@ -5,7 +5,7 @@ import '../../theme/app_theme.dart';
 import '../../services/auth_service.dart';
 import 'signup_screen.dart';
 
-/// A premium login screen with the CBHIMS branding, glassmorphism card,
+/// A premium login screen with the STOKADO branding, glassmorphism card,
 /// and subtle gradient background.
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -139,9 +139,9 @@ class _LoginScreenState extends State<LoginScreen>
             end: Alignment.bottomRight,
             colors: [
               Color(0xFFF8F9FA),
-              Color(0xFFFFEBEB),
+              Color.fromARGB(255, 235, 253, 255),
               Color(0xFFF8F9FA),
-              Color(0xFFFFF0F0),
+              Color.fromARGB(255, 240, 254, 255),
             ],
             stops: [0.0, 0.35, 0.65, 1.0],
           ),
@@ -211,8 +211,7 @@ class _LoginScreenState extends State<LoginScreen>
                           const SizedBox(height: 20),
 
                           // ── Brand ──
-                          Text('Celis Brothers Hardware',
-                              style: AppTextStyles.h1),
+                          Text('STOKADO', style: AppTextStyles.h1),
                           const SizedBox(height: 6),
                           Text(
                             'Inventory Management System',

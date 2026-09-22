@@ -154,9 +154,9 @@ class _SignupScreenState extends State<SignupScreen>
             end: Alignment.bottomRight,
             colors: [
               Color(0xFFF8F9FA),
-              Color(0xFFFFEBEB),
+              Color.fromARGB(255, 235, 253, 255),
               Color(0xFFF8F9FA),
-              Color(0xFFFFF0F0),
+              Color.fromARGB(255, 240, 254, 255),
             ],
             stops: [0.0, 0.35, 0.65, 1.0],
           ),
@@ -226,7 +226,7 @@ class _SignupScreenState extends State<SignupScreen>
                           const SizedBox(height: 20),
 
                           // ── Brand ──
-                          Text('CBHIMS', style: AppTextStyles.h1),
+                          Text('STOKADO', style: AppTextStyles.h1),
                           const SizedBox(height: 6),
                           Text(
                             'Create your account',

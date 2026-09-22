@@ -454,7 +454,7 @@ class _ReportDetailDialogState extends State<ReportDetailDialog> {
                     crossAxisAlignment: pw.CrossAxisAlignment.start,
                     children: [
                       pw.Text(
-                        'Celis Brothers Hardware',
+                        'STOKADO',
                         style: const pw.TextStyle(
                           fontSize: 20,
                           fontWeight: pw.FontWeight.bold,
@@ -561,7 +561,7 @@ class _ReportDetailDialogState extends State<ReportDetailDialog> {
     final StringBuffer csvBuffer = StringBuffer();
 
     // Title & Date Header
-    csvBuffer.writeln('"Celis Brothers Hardware - ${widget.reportTitle}"');
+    csvBuffer.writeln('"STOKADO - ${widget.reportTitle}"');
     if (widget.reportType == ReportType.specificItems) {
       csvBuffer.writeln(
           '"Specific Items Report - ${_filteredProducts.length} Selected Items"');
@@ -680,7 +680,7 @@ class _ReportDetailDialogState extends State<ReportDetailDialog> {
                   children: [
                     Expanded(
                       child: Text(
-                        'Celis Brothers Hardware',
+                        'STOKADO',
                         style: AppTextStyles.h2
                             .copyWith(fontSize: compact ? 16 : 20),
                         overflow: TextOverflow.ellipsis,

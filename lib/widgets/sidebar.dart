@@ -84,8 +84,8 @@ class Sidebar extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 45,
-            height: 45,
+            width: 47,
+            height: 42,
             decoration: BoxDecoration(
               color: AppColors.primary,
               borderRadius: BorderRadius.circular(9),
@@ -95,7 +95,7 @@ class Sidebar extends StatelessWidget {
           const SizedBox(width: 10),
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
-            child: Text('CBHIMS', style: AppTextStyles.h3),
+            child: Text('STOKADO', style: AppTextStyles.h3),
           ),
         ],
       ),
