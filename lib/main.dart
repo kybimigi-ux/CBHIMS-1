@@ -74,7 +74,7 @@ class InventoryApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'CBHIMS — Inventory Management',
+      title: 'STOKADO — Inventory Management',
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(),
       home: const AuthGate(),

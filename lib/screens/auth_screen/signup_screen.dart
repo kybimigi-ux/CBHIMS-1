@@ -83,10 +83,12 @@ class _SignupScreenState extends State<SignupScreen>
       String msg;
       switch (e.code) {
         case 'operation-not-allowed':
-          msg = 'Email/Password sign-in is disabled in Firebase Console. Please go to Firebase Console -> Authentication -> Sign-in method and enable Email/Password.';
+          msg =
+              'Email/Password sign-in is disabled in Firebase Console. Please go to Firebase Console -> Authentication -> Sign-in method and enable Email/Password.';
           break;
         case 'email-already-in-use':
-          msg = 'An account already exists with this email address. Please sign in instead.';
+          msg =
+              'An account already exists with this email address. Please sign in instead.';
           break;
         case 'invalid-email':
           msg = 'The email address is invalid. Please check and try again.';
