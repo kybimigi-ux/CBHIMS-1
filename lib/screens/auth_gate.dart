@@ -22,8 +22,8 @@ class _AuthGateState extends State<AuthGate> {
   }
 
   Future<void> _checkExistingSession() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
+    final isValid = await AuthService.instance.checkSessionValidity();
+    if (isValid) {
       await AuthService.instance.fetchUserRole();
     }
     if (mounted) {

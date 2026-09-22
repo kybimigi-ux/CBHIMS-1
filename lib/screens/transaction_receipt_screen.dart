@@ -357,42 +357,65 @@ class _TransactionReceiptScreenState extends State<TransactionReceiptScreen> {
         backgroundColor: AppColors.surface,
         elevation: 0,
         foregroundColor: AppColors.textPrimary,
-        title: Text('Stock Voucher - ${transaction.billNo}',
-            style: AppTextStyles.h3),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 4),
-            child: IconButton(
-              tooltip: 'Share PDF',
-              icon: const Icon(Icons.share_rounded, size: 20),
-              onPressed: () => _sharePdf(context),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: OutlinedButton.icon(
-              onPressed: _onEdit,
-              icon: const Icon(Icons.edit_outlined, size: 16),
-              label: const Text('Edit'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.textPrimary,
-                side: const BorderSide(color: AppColors.border),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8)),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: PrimaryButton(
-              label: 'Print / Download PDF',
-              icon: Icons.print_rounded,
-              onPressed: () => _printOrDownload(context),
-            ),
-          ),
-        ],
+        title: Text(
+          'Stock Voucher - ${transaction.billNo}',
+          style: AppTextStyles.h3,
+          overflow: TextOverflow.ellipsis,
+        ),
+        actions: MediaQuery.of(context).size.width < 600
+            ? [
+                IconButton(
+                  tooltip: 'Share PDF',
+                  icon: const Icon(Icons.share_rounded, size: 20),
+                  onPressed: () => _sharePdf(context),
+                ),
+                IconButton(
+                  tooltip: 'Edit Transaction',
+                  icon: const Icon(Icons.edit_outlined, size: 20),
+                  onPressed: _onEdit,
+                ),
+                IconButton(
+                  tooltip: 'Print / Download PDF',
+                  icon: const Icon(Icons.print_rounded,
+                      size: 20, color: AppColors.primary),
+                  onPressed: () => _printOrDownload(context),
+                ),
+                const SizedBox(width: 4),
+              ]
+            : [
+                Padding(
+                  padding: const EdgeInsets.only(right: 4),
+                  child: IconButton(
+                    tooltip: 'Share PDF',
+                    icon: const Icon(Icons.share_rounded, size: 20),
+                    onPressed: () => _sharePdf(context),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: OutlinedButton.icon(
+                    onPressed: _onEdit,
+                    icon: const Icon(Icons.edit_outlined, size: 16),
+                    label: const Text('Edit'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.textPrimary,
+                      side: const BorderSide(color: AppColors.border),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(right: 16),
+                  child: PrimaryButton(
+                    label: 'Print / Download PDF',
+                    icon: Icons.print_rounded,
+                    onPressed: () => _printOrDownload(context),
+                  ),
+                ),
+              ],
       ),
       body: LayoutBuilder(
         builder: (context, constraints) {

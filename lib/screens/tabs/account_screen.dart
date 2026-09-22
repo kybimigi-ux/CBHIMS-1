@@ -229,7 +229,13 @@ class _AccountScreenState extends State<AccountScreen> {
                           children: [
                             Row(
                               children: [
-                                Text(name, style: AppTextStyles.h2),
+                                Flexible(
+                                  child: Text(
+                                    name,
+                                    style: AppTextStyles.h2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
                                 const SizedBox(width: 12),
                                 if (_role != null)
                                   StatusBadge(label: _role!, tone: _roleBadgeTone)

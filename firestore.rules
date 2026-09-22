@@ -1,0 +1,126 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // =========================================================================
+    // Helper Functions
+    // =========================================================================
+
+    /// Check if the request comes from an authenticated Firebase user.
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    /// Retrieve the user document data from the `users` collection.
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    /// Check if the user document exists and has an approved role assigned.
+    function isApproved() {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        getUserData().get('role', null) != null;
+    }
+
+    /// Check if the current user has the 'Admin' role.
+    function isAdmin() {
+      return isApproved() &&
+        getUserData().get('role', '').lower() == 'admin';
+    }
+
+    /// Check if the current user has the 'Manager' role.
+    function isManager() {
+      return isApproved() &&
+        getUserData().get('role', '').lower() == 'manager';
+    }
+
+    /// Check if the current user is either a Manager or an Admin.
+    function isManagerOrAdmin() {
+      return isAdmin() || isManager();
+    }
+
+    // =========================================================================
+    // 1. Users Collection
+    // =========================================================================
+    // Schema: { full_name, email, role, created_at }
+    // Roles: 'admin', 'manager', 'staff', or null (pending approval)
+    match /users/{userId} {
+      // Any authenticated user can read user documents (needed for session checks,
+      // displaying team members in settings, and displaying names on transactions).
+      allow read: if isAuthenticated();
+
+      // Users can create their own profile document upon sign-up.
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+
+      // Update rules:
+      // - Admins can update any user's profile and assign/change roles.
+      // - Non-admin users can only update their own profile (name, email)
+      //   and CANNOT elevate or change their own role.
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        (
+          request.auth.uid == userId &&
+          request.resource.data.get('role', null) == resource.data.get('role', null)
+        )
+      );
+
+      // Only Admins can delete users.
+      allow delete: if isAdmin();
+    }
+
+    // =========================================================================
+    // 2. Products Collection
+    // =========================================================================
+    // Schema: { product_name, sku, category, price, cost_price, quantity,
+    //           unit, min_stock, is_active, created_at, updated_at }
+    match /products/{productId} {
+      // Any approved team member (Staff, Manager, Admin) can view inventory.
+      allow read: if isApproved();
+
+      // Approved team members can create new products.
+      allow create: if isApproved() && (
+        isManagerOrAdmin() ||
+        request.resource.data.keys().hasAll(['product_name', 'price', 'quantity', 'is_active'])
+      );
+
+      // Updating products:
+      // - Admins & Managers can modify any product detail.
+      // - Approved Staff can update stock quantities during transaction operations.
+      allow update: if isApproved();
+
+      // Only Admins or Managers can delete (or soft-delete) products.
+      allow delete: if isManagerOrAdmin();
+    }
+
+    // =========================================================================
+    // 3. Transactions Collection & Items Subcollection
+    // =========================================================================
+    // Schema: { bill_no, type, total_items, status, remarks, issued_to,
+    //           created_by, created_at }
+    match /transactions/{transactionId} {
+      // Any approved team member can view transactions, ledgers, and receipts.
+      allow read: if isApproved();
+
+      // Any approved user can record a transaction.
+      allow create: if isApproved() && (
+        request.resource.data.get('created_by', request.auth.uid) == request.auth.uid
+      );
+
+      // Only Admins can edit existing transactions.
+      allow update: if isAdmin();
+
+      // Only Admins can delete / void transactions.
+      allow delete: if isAdmin();
+
+      // Transaction items subcollection
+      // Schema: { product_id, product_name, quantity, unit, transaction_id }
+      match /items/{itemId} {
+        allow read: if isApproved();
+        allow create: if isApproved();
+        allow update, delete: if isAdmin();
+      }
+    }
+  }
+}

@@ -39,21 +39,30 @@ class Product {
       return null;
     }
 
+    final rawName = json['product_name'] ?? json['productName'] ?? json['name'] ?? '';
+    final rawIsActive = json['is_active'] ?? json['isActive'];
+    final bool active = rawIsActive is bool
+        ? rawIsActive
+        : (rawIsActive is String
+            ? rawIsActive.toLowerCase() != 'false'
+            : true);
+
     return Product(
-      id: json['id'] as String?,
-      productName: json['product_name'] as String? ?? '',
-      categoryId: json['category_id'] as String?,
-      categoryName: json['category_name'] as String?,
+      id: json['id']?.toString(),
+      productName: rawName.toString(),
+      categoryId: (json['category_id'] ?? json['categoryId'])?.toString(),
+      categoryName: (json['category_name'] ?? json['categoryName'])?.toString(),
       quantity: parseQty(json['quantity']),
-      unit: json['unit'] as String? ?? 'pcs',
-      isActive: json['is_active'] as bool? ?? true,
-      remarks: json['remarks'] as String?,
-      createdAt: parseDate(json['created_at']),
+      unit: json['unit']?.toString() ?? 'pcs',
+      isActive: active,
+      remarks: json['remarks']?.toString(),
+      createdAt: parseDate(json['created_at'] ?? json['createdAt']),
     );
   }
 
   factory Product.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
+    final rawData = doc.data() as Map<dynamic, dynamic>? ?? {};
+    final data = Map<String, dynamic>.from(rawData);
     data['id'] = doc.id;
     return Product.fromJson(data);
   }

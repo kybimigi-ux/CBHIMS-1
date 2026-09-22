@@ -5,6 +5,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
+import 'services/auth_service.dart';
 import 'services/connectivity_service.dart';
 import 'services/offline_queue_service.dart';
 import 'services/settings_service.dart';
@@ -19,6 +20,7 @@ void main() async {
     );
 
     await SettingsService.instance.init();
+    await AuthService.instance.init();
 
     await Hive.initFlutter();
     await OfflineQueueService.instance.init();

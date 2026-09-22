@@ -55,7 +55,7 @@ class ReportDetailDialog extends StatefulWidget {
 }
 
 class _ReportDetailDialogState extends State<ReportDetailDialog> {
-  DateTime _startDate = DateTime.now().subtract(const Duration(days: 30));
+  DateTime _startDate = DateTime.now().subtract(const Duration(days: 7));
   DateTime _endDate = DateTime.now();
 
   List<Product> _products = [];

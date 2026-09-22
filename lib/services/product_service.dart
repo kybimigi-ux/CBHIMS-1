@@ -23,11 +23,19 @@ class ProductService {
 
   /// Fetch all active products, ordered by name.
   Future<List<Product>> getAll() async {
-    final snap = await _products
-        .where('is_active', isEqualTo: true)
-        .orderBy('product_name')
-        .get();
-    return snap.docs.map((doc) => Product.fromFirestore(doc)).toList();
+    try {
+      final snap = await _products.get();
+      final products = snap.docs
+          .map((doc) => Product.fromFirestore(doc))
+          .where((p) => p.isActive)
+          .toList();
+      products.sort((a, b) =>
+          a.productName.toLowerCase().compareTo(b.productName.toLowerCase()));
+      return products;
+    } catch (e) {
+      debugPrint('[ProductService] getAll error: $e');
+      rethrow;
+    }
   }
 
   /// Fetch a single product by its Firestore document ID.
@@ -39,13 +47,9 @@ class ProductService {
 
   /// Search products by name (client-side filter since Firestore doesn't support ILIKE).
   Future<List<Product>> search(String query) async {
-    final snap = await _products
-        .where('is_active', isEqualTo: true)
-        .orderBy('product_name')
-        .get();
+    final all = await getAll();
     final lower = query.toLowerCase();
-    return snap.docs
-        .map((doc) => Product.fromFirestore(doc))
+    return all
         .where((p) => p.productName.toLowerCase().contains(lower))
         .toList();
   }
@@ -106,19 +110,37 @@ class ProductService {
 
   /// Get total active product count.
   Future<int> getTotalCount() async {
-    final snap =
-        await _products.where('is_active', isEqualTo: true).count().get();
-    return snap.count ?? 0;
+    try {
+      final snap =
+          await _products.where('is_active', isEqualTo: true).count().get();
+      return snap.count ?? 0;
+    } catch (_) {
+      try {
+        final all = await getAll();
+        return all.length;
+      } catch (_) {
+        return 0;
+      }
+    }
   }
 
   /// Get count of low-stock products (quantity <= 10 and > 0).
   Future<int> getLowStockCount() async {
-    final snap = await _products
-        .where('is_active', isEqualTo: true)
-        .where('quantity', isLessThanOrEqualTo: 10)
-        .where('quantity', isGreaterThan: 0)
-        .count()
-        .get();
-    return snap.count ?? 0;
+    try {
+      final snap = await _products
+          .where('is_active', isEqualTo: true)
+          .where('quantity', isLessThanOrEqualTo: 10)
+          .where('quantity', isGreaterThan: 0)
+          .count()
+          .get();
+      return snap.count ?? 0;
+    } catch (_) {
+      try {
+        final all = await getAll();
+        return all.where((p) => p.quantity <= 10 && p.quantity > 0).length;
+      } catch (_) {
+        return 0;
+      }
+    }
   }
 }

@@ -393,28 +393,32 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
               ),
             ),
             const SizedBox(width: 14),
-            Padding(
-              padding: const EdgeInsets.only(top: 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                      _isEditMode
-                          ? 'Edit Transaction'
-                          : (isReceive
-                              ? 'Receive Stock'
-                              : 'Release Stock'),
-                      style: AppTextStyles.h3),
-                  const SizedBox(height: 2),
-                  Text(
-                      _isEditMode
-                          ? 'Update this transaction\'s details.'
-                          : (isReceive
-                              ? 'Record incoming stock movement.'
-                              : 'Record outgoing stock movement.'),
-                      style: AppTextStyles.caption),
-                ],
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                        _isEditMode
+                            ? 'Edit Transaction'
+                            : (isReceive
+                                ? 'Receive Stock'
+                                : 'Release Stock'),
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.h3),
+                    const SizedBox(height: 2),
+                    Text(
+                        _isEditMode
+                            ? 'Update this transaction\'s details.'
+                            : (isReceive
+                                ? 'Record incoming stock movement.'
+                                : 'Record outgoing stock movement.'),
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.caption),
+                  ],
+                ),
               ),
             ),
           ],
@@ -760,17 +764,21 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                                 children: [
                                   qtyStepperWidget,
                                   if (selectedProduct != null)
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 8, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: AppColors.neutralSoft,
-                                        borderRadius: BorderRadius.circular(6),
-                                      ),
-                                      child: Text(
-                                        'Stock: ${selectedProduct.formattedQuantity} ${selectedProduct.unit}',
-                                        style: AppTextStyles.caption.copyWith(
-                                          fontWeight: FontWeight.w600,
+                                    Flexible(
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 8, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.neutralSoft,
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: Text(
+                                          'Stock: ${selectedProduct.formattedQuantity} ${selectedProduct.unit}',
+                                          style: AppTextStyles.caption.copyWith(
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                          maxLines: 1,
                                         ),
                                       ),
                                     ),
