@@ -143,6 +143,30 @@ service cloud.firestore {
       allow delete: if isAuthenticated() && (
         resource.data.createdBy == request.auth.uid || isAdmin()
       );
+
+      // ── Per-hardware Products Subcollection ──
+      // Schema: { product_name, quantity, unit, remarks, is_active, created_at }
+      match /products/{productId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated();
+        allow update: if isAuthenticated();
+        allow delete: if isAuthenticated();
+      }
+
+      // ── Per-hardware Transactions Subcollection ──
+      // Schema: { bill_no, type, total_items, status, remarks, issued_to, created_by, created_at }
+      match /transactions/{transactionId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated();
+        allow update: if isAuthenticated();
+        allow delete: if isAuthenticated();
+
+        // Transaction items nested subcollection
+        match /items/{itemId} {
+          allow read: if isAuthenticated();
+          allow write: if isAuthenticated();
+        }
+      }
     }
   }
 }
