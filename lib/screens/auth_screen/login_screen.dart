@@ -131,7 +131,10 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   Future<void> _handleDemoSignIn(String role) async {
-    setState(() { _demoLoading = true; _demoRole = role; });
+    setState(() {
+      _demoLoading = true;
+      _demoRole = role;
+    });
     try {
       await AuthService.instance.signInDemo(role: role);
       // Pop back to root so AuthGate can display HardwareLobbyScreen.
@@ -144,7 +147,8 @@ class _LoginScreenState extends State<LoginScreen>
           content: Text(msg),
           backgroundColor: AppColors.danger,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
       );
     } catch (e) {
@@ -154,11 +158,16 @@ class _LoginScreenState extends State<LoginScreen>
           content: Text('Demo sign-in failed: $e'),
           backgroundColor: AppColors.danger,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
       );
     } finally {
-      if (mounted) setState(() { _demoLoading = false; _demoRole = null; });
+      if (mounted)
+        setState(() {
+          _demoLoading = false;
+          _demoRole = null;
+        });
     }
   }
 
@@ -272,9 +281,11 @@ class _LoginScreenState extends State<LoginScreen>
                               children: [
                                 Expanded(
                                   child: GestureDetector(
-                                    onTap: () => setState(() => _selectedRole = 'admin'),
+                                    onTap: () =>
+                                        setState(() => _selectedRole = 'admin'),
                                     child: Container(
-                                      padding: const EdgeInsets.symmetric(vertical: 9),
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 9),
                                       decoration: BoxDecoration(
                                         color: _selectedRole == 'admin'
                                             ? AppColors.surface
@@ -283,7 +294,8 @@ class _LoginScreenState extends State<LoginScreen>
                                         boxShadow: _selectedRole == 'admin'
                                             ? [
                                                 BoxShadow(
-                                                  color: Colors.black.withValues(alpha: 0.05),
+                                                  color: Colors.black
+                                                      .withValues(alpha: 0.05),
                                                   blurRadius: 4,
                                                   offset: const Offset(0, 1),
                                                 ),
@@ -291,7 +303,8 @@ class _LoginScreenState extends State<LoginScreen>
                                             : null,
                                       ),
                                       child: Row(
-                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
                                         children: [
                                           Icon(Icons.storefront_rounded,
                                               size: 16,
@@ -303,9 +316,10 @@ class _LoginScreenState extends State<LoginScreen>
                                             'Store Owner',
                                             style: TextStyle(
                                               fontSize: 12.5,
-                                              fontWeight: _selectedRole == 'admin'
-                                                  ? FontWeight.w700
-                                                  : FontWeight.w500,
+                                              fontWeight:
+                                                  _selectedRole == 'admin'
+                                                      ? FontWeight.w700
+                                                      : FontWeight.w500,
                                               color: _selectedRole == 'admin'
                                                   ? AppColors.primary
                                                   : AppColors.textSecondary,
@@ -318,9 +332,11 @@ class _LoginScreenState extends State<LoginScreen>
                                 ),
                                 Expanded(
                                   child: GestureDetector(
-                                    onTap: () => setState(() => _selectedRole = 'staff'),
+                                    onTap: () =>
+                                        setState(() => _selectedRole = 'staff'),
                                     child: Container(
-                                      padding: const EdgeInsets.symmetric(vertical: 9),
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 9),
                                       decoration: BoxDecoration(
                                         color: _selectedRole == 'staff'
                                             ? AppColors.surface
@@ -329,7 +345,8 @@ class _LoginScreenState extends State<LoginScreen>
                                         boxShadow: _selectedRole == 'staff'
                                             ? [
                                                 BoxShadow(
-                                                  color: Colors.black.withValues(alpha: 0.05),
+                                                  color: Colors.black
+                                                      .withValues(alpha: 0.05),
                                                   blurRadius: 4,
                                                   offset: const Offset(0, 1),
                                                 ),
@@ -337,7 +354,8 @@ class _LoginScreenState extends State<LoginScreen>
                                             : null,
                                       ),
                                       child: Row(
-                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
                                         children: [
                                           Icon(Icons.badge_outlined,
                                               size: 16,
@@ -349,9 +367,10 @@ class _LoginScreenState extends State<LoginScreen>
                                             'Staff Member',
                                             style: TextStyle(
                                               fontSize: 12.5,
-                                              fontWeight: _selectedRole == 'staff'
-                                                  ? FontWeight.w700
-                                                  : FontWeight.w500,
+                                              fontWeight:
+                                                  _selectedRole == 'staff'
+                                                      ? FontWeight.w700
+                                                      : FontWeight.w500,
                                               color: _selectedRole == 'staff'
                                                   ? const Color(0xFF0D9488)
                                                   : AppColors.textSecondary,
@@ -500,7 +519,8 @@ class _LoginScreenState extends State<LoginScreen>
                                 onTap: () {
                                   Navigator.of(context).push(
                                     MaterialPageRoute(
-                                      builder: (_) => SignupScreen(initialRole: _selectedRole),
+                                      builder: (_) => SignupScreen(
+                                          initialRole: _selectedRole),
                                     ),
                                   );
                                 },
@@ -521,7 +541,8 @@ class _LoginScreenState extends State<LoginScreen>
                             children: [
                               const Expanded(child: Divider()),
                               Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 12),
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 12),
                                 child: Text('Try Demo',
                                     style: AppTextStyles.caption),
                               ),
@@ -537,18 +558,27 @@ class _LoginScreenState extends State<LoginScreen>
                                       ? null
                                       : () => _handleDemoSignIn('admin'),
                                   icon: (_demoLoading && _demoRole == 'admin')
-                                      ? const SizedBox(width: 14, height: 14,
-                                          child: CircularProgressIndicator(strokeWidth: 2,
-                                              valueColor: AlwaysStoppedAnimation(Colors.white)))
-                                      : const Icon(Icons.admin_panel_settings_outlined, size: 16),
+                                      ? const SizedBox(
+                                          width: 14,
+                                          height: 14,
+                                          child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              valueColor:
+                                                  AlwaysStoppedAnimation(
+                                                      Colors.white)))
+                                      : const Icon(
+                                          Icons.admin_panel_settings_outlined,
+                                          size: 16),
                                   label: const Text('Demo Admin'),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: AppColors.primary,
                                     foregroundColor: Colors.white,
                                     elevation: 0,
-                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 12),
                                     shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(10)),
+                                        borderRadius:
+                                            BorderRadius.circular(10)),
                                   ),
                                 ),
                               ),
@@ -559,18 +589,26 @@ class _LoginScreenState extends State<LoginScreen>
                                       ? null
                                       : () => _handleDemoSignIn('staff'),
                                   icon: (_demoLoading && _demoRole == 'staff')
-                                      ? const SizedBox(width: 14, height: 14,
-                                          child: CircularProgressIndicator(strokeWidth: 2,
-                                              valueColor: AlwaysStoppedAnimation(
-                                                  AppColors.primary)))
-                                      : const Icon(Icons.person_outline_rounded, size: 16),
+                                      ? const SizedBox(
+                                          width: 14,
+                                          height: 14,
+                                          child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              valueColor:
+                                                  AlwaysStoppedAnimation(
+                                                      AppColors.primary)))
+                                      : const Icon(Icons.person_outline_rounded,
+                                          size: 16),
                                   label: const Text('Demo Staff'),
                                   style: OutlinedButton.styleFrom(
                                     foregroundColor: AppColors.primary,
-                                    side: const BorderSide(color: AppColors.primary),
-                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                    side: const BorderSide(
+                                        color: AppColors.primary),
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 12),
                                     shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(10)),
+                                        borderRadius:
+                                            BorderRadius.circular(10)),
                                   ),
                                 ),
                               ),
