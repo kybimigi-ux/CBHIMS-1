@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/product.dart';
 import '../../services/product_service.dart';
+import '../../services/hardware_context.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/buttons.dart';
 import '../../widgets/notification_banner.dart';
@@ -178,6 +179,10 @@ class _InventoryScreenState extends State<InventoryScreen> {
     final compact = screenWidth < 600;
     final horizontalPadding = compact ? 16.0 : 32.0;
 
+    final canAdd = HardwareContext.instance.canAddProducts;
+    final canEdit = HardwareContext.instance.canEditProducts;
+    final canDelete = HardwareContext.instance.canRemoveProducts;
+
     return SingleChildScrollView(
       padding: EdgeInsets.fromLTRB(horizontalPadding, 28, horizontalPadding, 40),
       child: Column(
@@ -189,11 +194,12 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 ? 'Loading products...'
                 : '${_products.length} products in stock',
             actions: [
-              PrimaryButton(
-                label: 'Add New Product',
-                icon: Icons.add_rounded,
-                onPressed: _onAddProduct,
-              ),
+              if (canAdd)
+                PrimaryButton(
+                  label: 'Add New Product',
+                  icon: Icons.add_rounded,
+                  onPressed: _onAddProduct,
+                ),
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
@@ -247,6 +253,8 @@ class _InventoryScreenState extends State<InventoryScreen> {
                             onSelectProduct: _onOpenProductLedger,
                             onEdit: _onEditProduct,
                             onDelete: _onDeleteProduct,
+                            canEdit: canEdit,
+                            canDelete: canDelete,
                           ),
           ),
         ],
@@ -348,12 +356,16 @@ class _ProductTable extends StatelessWidget {
   final Function(Product) onSelectProduct;
   final Function(Product) onEdit;
   final Function(Product) onDelete;
+  final bool canEdit;
+  final bool canDelete;
 
   const _ProductTable({
     required this.products,
     required this.onSelectProduct,
     required this.onEdit,
     required this.onDelete,
+    required this.canEdit,
+    required this.canDelete,
   });
 
   static const double _stockColumnWidth = 120;
@@ -412,25 +424,27 @@ class _ProductTable extends StatelessWidget {
                           ),
                         ),
                         const Spacer(),
-                        IconButton(
-                          onPressed: () => onEdit(p),
-                          icon: const Icon(Icons.edit_outlined,
-                              size: 18, color: AppColors.primary),
-                          splashRadius: 18,
-                          tooltip: 'Edit',
-                          constraints: const BoxConstraints(),
-                          padding: const EdgeInsets.all(8),
-                        ),
-                        const SizedBox(width: 4),
-                        IconButton(
-                          onPressed: () => onDelete(p),
-                          icon: const Icon(Icons.delete_outline_rounded,
-                              size: 18, color: AppColors.danger),
-                          splashRadius: 18,
-                          tooltip: 'Delete',
-                          constraints: const BoxConstraints(),
-                          padding: const EdgeInsets.all(8),
-                        ),
+                        if (canEdit)
+                          IconButton(
+                            onPressed: () => onEdit(p),
+                            icon: const Icon(Icons.edit_outlined,
+                                size: 18, color: AppColors.primary),
+                            splashRadius: 18,
+                            tooltip: 'Edit',
+                            constraints: const BoxConstraints(),
+                            padding: const EdgeInsets.all(8),
+                          ),
+                        if (canEdit && canDelete) const SizedBox(width: 4),
+                        if (canDelete)
+                          IconButton(
+                            onPressed: () => onDelete(p),
+                            icon: const Icon(Icons.delete_outline_rounded,
+                                size: 18, color: AppColors.danger),
+                            splashRadius: 18,
+                            tooltip: 'Delete',
+                            constraints: const BoxConstraints(),
+                            padding: const EdgeInsets.all(8),
+                          ),
                       ],
                     ),
                   ],
@@ -463,12 +477,14 @@ class _ProductTable extends StatelessWidget {
                   child: Text('IN STOCK',
                       textAlign: TextAlign.right, style: AppTextStyles.label),
                 ),
-                const SizedBox(width: 28),
-                SizedBox(
-                  width: _actionsColumnWidth,
-                  child: Text('ACTIONS',
-                      textAlign: TextAlign.right, style: AppTextStyles.label),
-                ),
+                if (canEdit || canDelete) ...[
+                  const SizedBox(width: 28),
+                  SizedBox(
+                    width: _actionsColumnWidth,
+                    child: Text('ACTIONS',
+                        textAlign: TextAlign.right, style: AppTextStyles.label),
+                  ),
+                ],
               ],
             ),
           ),
@@ -501,30 +517,34 @@ class _ProductTable extends StatelessWidget {
                             style: AppTextStyles.bodyMedium,
                           ),
                         ),
-                        const SizedBox(width: 28),
-                        SizedBox(
-                          width: _actionsColumnWidth,
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              IconButton(
-                                onPressed: () => onEdit(p),
-                                icon: const Icon(Icons.edit_outlined,
-                                    size: 18, color: AppColors.primary),
-                                splashRadius: 18,
-                                tooltip: 'Edit',
-                              ),
-                              IconButton(
-                                onPressed: () => onDelete(p),
-                                icon: const Icon(Icons.delete_outline_rounded,
-                                    size: 18, color: AppColors.danger),
-                                splashRadius: 18,
-                                tooltip: 'Delete',
-                              ),
-                            ],
+                        if (canEdit || canDelete) ...[
+                          const SizedBox(width: 28),
+                          SizedBox(
+                            width: _actionsColumnWidth,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                if (canEdit)
+                                  IconButton(
+                                    onPressed: () => onEdit(p),
+                                    icon: const Icon(Icons.edit_outlined,
+                                        size: 18, color: AppColors.primary),
+                                    splashRadius: 18,
+                                    tooltip: 'Edit',
+                                  ),
+                                if (canDelete)
+                                  IconButton(
+                                    onPressed: () => onDelete(p),
+                                    icon: const Icon(Icons.delete_outline_rounded,
+                                        size: 18, color: AppColors.danger),
+                                    splashRadius: 18,
+                                    tooltip: 'Delete',
+                                  ),
+                              ],
+                            ),
                           ),
-                        ),
+                        ],
                       ],
                     ),
                   ),

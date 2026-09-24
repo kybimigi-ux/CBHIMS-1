@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../models/transaction.dart';
 import '../../services/auth_service.dart';
+import '../../services/hardware_context.dart';
 import '../../services/connectivity_service.dart';
 import '../../services/offline_queue_service.dart';
 import '../../services/sync_service.dart';
@@ -58,7 +59,9 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   TransactionTypeFilter _typeFilter = TransactionTypeFilter.all;
   TransactionSort _sortOption = TransactionSort.recentlyAdded;
 
-  bool get _isAdmin => AuthService.instance.isAdmin;
+  bool get _canCancelTransactions =>
+      HardwareContext.instance.canCancelTransactions;
+  bool get _canAddTransactions => HardwareContext.instance.canAddTransactions;
 
   int get _pendingSyncCount =>
       _transactions.where((t) => t.isPendingSync).length;
@@ -407,22 +410,23 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
             ),
           ),
         ),
-        SafeArea(
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              border: const Border(top: BorderSide(color: AppColors.border)),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 10,
-                  offset: const Offset(0, -4),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
+        if (_canAddTransactions)
+          SafeArea(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                border: const Border(top: BorderSide(color: AppColors.border)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, -4),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
                 Expanded(
                   child: SizedBox(
                     height: 48,
@@ -693,7 +697,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                             ),
                           ),
                         ),
-                        if (_isAdmin)
+                        if (_canCancelTransactions)
                           IconButton(
                             onPressed: () => _onDeleteTransaction(t),
                             icon: const Icon(Icons.delete_outline_rounded,
@@ -740,7 +744,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                 child: Text('TOTAL ITEMS',
                     textAlign: TextAlign.right, style: AppTextStyles.label),
               ),
-              if (_isAdmin) const SizedBox(width: 48),
+              if (_canCancelTransactions) const SizedBox(width: 48),
             ],
           ),
         ),
@@ -808,7 +812,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                         style: AppTextStyles.bodyMedium,
                       ),
                     ),
-                    if (_isAdmin)
+                    if (_canCancelTransactions)
                       SizedBox(
                         width: 48,
                         child: Align(

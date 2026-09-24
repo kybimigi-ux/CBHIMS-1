@@ -122,6 +122,47 @@ class _AccountScreenState extends State<AccountScreen> {
     }
   }
 
+  Future<void> _handleLogout() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.logout_rounded, color: AppColors.danger, size: 22),
+            const SizedBox(width: 10),
+            Text('Log Out', style: AppTextStyles.h3),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to log out of STOKADO?',
+          style: AppTextStyles.body,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('Cancel',
+                style: AppTextStyles.bodyMedium
+                    .copyWith(color: AppColors.textSecondary)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.danger,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text('Log Out'),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      await AuthService.instance.signOut();
+    }
+  }
+
   BadgeTone get _roleBadgeTone {
     switch ((_role ?? '').toLowerCase()) {
       case 'admin':
@@ -203,7 +244,7 @@ class _AccountScreenState extends State<AccountScreen> {
                         child: SecondaryButton(
                           label: 'Logout',
                           icon: Icons.logout_rounded,
-                          onPressed: () => AuthService.instance.signOut(),
+                          onPressed: _handleLogout,
                         ),
                       ),
                     ],
@@ -255,7 +296,7 @@ class _AccountScreenState extends State<AccountScreen> {
                       SecondaryButton(
                         label: 'Logout',
                         icon: Icons.logout_rounded,
-                        onPressed: () => AuthService.instance.signOut(),
+                        onPressed: _handleLogout,
                       ),
                     ],
                   ),

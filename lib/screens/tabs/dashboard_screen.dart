@@ -3,6 +3,7 @@ import '../../models/transaction.dart';
 import '../../services/offline_queue_service.dart';
 import '../../services/product_service.dart';
 import '../../services/transaction_service.dart';
+import '../../services/hardware_context.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/section_card.dart';
 import '../../widgets/stat_card.dart';
@@ -204,37 +205,53 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildQuickActions() {
+    final canAddProduct = HardwareContext.instance.canAddProducts;
+    final canAddTransaction = HardwareContext.instance.canAddTransactions;
+
+    final hasAnyAction = canAddProduct || canAddTransaction;
+
     return SectionCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('Quick Actions', style: AppTextStyles.h3),
           const SizedBox(height: 4),
-          Text('Common tasks, one tap away.', style: AppTextStyles.caption),
-          const SizedBox(height: AppSpacing.lg),
-          _QuickActionButton(
-            icon: Icons.add_circle_rounded,
-            label: 'Add Product',
-            iconColor: AppColors.primary,
-            iconBg: AppColors.primarySoft,
-            onTap: _onAddProduct,
+          Text(
+            hasAnyAction
+                ? 'Common tasks, one tap away.'
+                : 'No quick actions available for your role.',
+            style: AppTextStyles.caption,
           ),
-          const SizedBox(height: AppSpacing.sm),
-          _QuickActionButton(
-            icon: Icons.arrow_downward_rounded,
-            label: 'Receive Stock',
-            iconColor: AppColors.success,
-            iconBg: AppColors.successSoft,
-            onTap: _onReceive,
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          _QuickActionButton(
-            icon: Icons.arrow_upward_rounded,
-            label: 'Release Stock',
-            iconColor: AppColors.danger,
-            iconBg: const Color(0x1AEF4444),
-            onTap: _onRelease,
-          ),
+          if (hasAnyAction) ...[
+            const SizedBox(height: AppSpacing.lg),
+            if (canAddProduct) ...[
+              _QuickActionButton(
+                icon: Icons.add_circle_rounded,
+                label: 'Add Product',
+                iconColor: AppColors.primary,
+                iconBg: AppColors.primarySoft,
+                onTap: _onAddProduct,
+              ),
+              if (canAddTransaction) const SizedBox(height: AppSpacing.sm),
+            ],
+            if (canAddTransaction) ...[
+              _QuickActionButton(
+                icon: Icons.arrow_downward_rounded,
+                label: 'Receive Stock',
+                iconColor: AppColors.success,
+                iconBg: AppColors.successSoft,
+                onTap: _onReceive,
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              _QuickActionButton(
+                icon: Icons.arrow_upward_rounded,
+                label: 'Release Stock',
+                iconColor: AppColors.danger,
+                iconBg: const Color(0x1AEF4444),
+                onTap: _onRelease,
+              ),
+            ],
+          ],
         ],
       ),
     );

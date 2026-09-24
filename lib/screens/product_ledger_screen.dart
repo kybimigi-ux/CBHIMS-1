@@ -9,6 +9,7 @@ import '../models/product.dart';
 import '../models/transaction.dart';
 import '../services/product_service.dart';
 import '../services/transaction_service.dart';
+import '../services/hardware_context.dart';
 import '../theme/app_theme.dart';
 import '../widgets/buttons.dart';
 import '../widgets/pdf_preview_screen.dart';
@@ -922,10 +923,12 @@ class _ProductLedgerScreenState extends State<ProductLedgerScreen> {
                     },
                   ),
                 ),
-      bottomNavigationBar: SafeArea(
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-          decoration: BoxDecoration(
+      bottomNavigationBar: !HardwareContext.instance.canAddTransactions
+          ? null
+          : SafeArea(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                decoration: BoxDecoration(
             color: AppColors.surface,
             border: const Border(top: BorderSide(color: AppColors.border)),
             boxShadow: [
