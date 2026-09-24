@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import '../models/hardware.dart';
 import '../services/auth_service.dart';
+import '../services/hardware_context.dart';
 import '../services/hardware_service.dart';
+import '../services/navigation_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/notification_banner.dart';
+import 'manage_member_permissions_screen.dart';
 
 /// Settings screen for a hardware workspace — lets admins manage members,
 /// invite staff by email, rename/describe the workspace, and delete it.
@@ -182,7 +185,11 @@ class _HardwareSettingsScreenState extends State<HardwareSettingsScreen> {
     if (confirmed != true) return;
     try {
       await HardwareService.instance.deleteHardware(_hw.id);
-      if (mounted) { Navigator.of(context).pop(); }
+      // Pop all the way back to the lobby FIRST, then clear the active workspace.
+      // This order matters: clearing first triggers MainLayoutScreen's
+      // ListenableBuilder to rebuild with a null workspace mid-animation.
+      NavigationService.popToRoot();
+      HardwareContext.instance.clearActiveHardware();
     } catch (e) {
       if (mounted) {
         NotificationBanner.show(context, 'Failed: $e',
@@ -369,8 +376,29 @@ class _HardwareSettingsScreenState extends State<HardwareSettingsScreen> {
 
                   // ── Section: Members ──
                   _buildSectionHeader(
-                      'Members', Icons.people_outlined,
-                      '${_hw.memberCount} member${_hw.memberCount != 1 ? 's' : ''} in this workspace.'),
+                    'Members',
+                    Icons.people_outlined,
+                    '${_hw.memberCount} member${_hw.memberCount != 1 ? 's' : ''} in this workspace.',
+                    trailing: ElevatedButton.icon(
+                      onPressed: () async {
+                        await Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => ManageMemberPermissionsScreen(hardware: _hw),
+                          ),
+                        );
+                        _reload();
+                      },
+                      icon: const Icon(Icons.tune_rounded, size: 14),
+                      label: const Text('Manage'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: 14),
                   _buildCard(Column(
                     children: _hw.memberList.map((member) {
@@ -507,7 +535,7 @@ class _HardwareSettingsScreenState extends State<HardwareSettingsScreen> {
     );
   }
 
-  Widget _buildSectionHeader(String title, IconData icon, String subtitle) {
+  Widget _buildSectionHeader(String title, IconData icon, String subtitle, {Widget? trailing}) {
     return Row(
       children: [
         Container(
@@ -526,6 +554,10 @@ class _HardwareSettingsScreenState extends State<HardwareSettingsScreen> {
             ],
           ),
         ),
+        if (trailing != null) ...[
+          const SizedBox(width: 10),
+          trailing,
+        ],
       ],
     );
   }
