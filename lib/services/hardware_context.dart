@@ -1,5 +1,6 @@
-﻿import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart';
 import '../models/hardware.dart';
+import 'auth_service.dart';
 
 /// Singleton ChangeNotifier that holds the currently active hardware workspace.
 /// Screens and widgets can listen to this to know which workspace is selected.
@@ -34,4 +35,40 @@ class HardwareContext extends ChangeNotifier {
     _activeHardware = null;
     notifyListeners();
   }
+
+  /// Current user as a member of the active hardware workspace.
+  HardwareMember? get currentMember {
+    final uid = AuthService.instance.userId;
+    if (uid == null || _activeHardware == null) return null;
+    return _activeHardware!.members[uid];
+  }
+
+  /// Whether the current user is an Admin/Store Owner in this workspace or globally.
+  bool get isCurrentAdmin {
+    final uid = AuthService.instance.userId;
+    if (uid == null) return false;
+    if (AuthService.instance.isAdmin) return true;
+    if (_activeHardware?.createdBy == uid) return true;
+    return currentMember?.isAdmin ?? false;
+  }
+
+  /// Whether current user is allowed to add new products.
+  bool get canAddProducts =>
+      isCurrentAdmin || (currentMember?.canAddProducts ?? false);
+
+  /// Whether current user is allowed to edit existing products.
+  bool get canEditProducts =>
+      isCurrentAdmin || (currentMember?.canEditProducts ?? false);
+
+  /// Whether current user is allowed to remove/delete products.
+  bool get canRemoveProducts =>
+      isCurrentAdmin || (currentMember?.canRemoveProducts ?? false);
+
+  /// Whether current user is allowed to add transactions (Receive / Release).
+  bool get canAddTransactions =>
+      isCurrentAdmin || (currentMember?.canAddTransactions ?? false);
+
+  /// Whether current user is allowed to cancel/delete transactions.
+  bool get canCancelTransactions =>
+      isCurrentAdmin || (currentMember?.canCancelTransactions ?? false);
 }

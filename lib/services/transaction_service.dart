@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/transaction.dart';
 import '../models/transaction_item.dart';
+import 'hardware_context.dart';
 import 'product_service.dart';
 import 'package:uuid/uuid.dart';
 import '../models/pending_transaction.dart';
@@ -27,8 +28,13 @@ bool _looksLikeConnectivityError(Object e) {
 Future<List<String>> getAllBillNumbers() async {
   if (_billNoCache != null) return _billNoCache!;
   try {
-    final snap =
-        await FirebaseFirestore.instance.collection('transactions').get();
+    final hwId = HardwareContext.instance.activeHardware?.id;
+    if (hwId == null || hwId.isEmpty) return [];
+    final snap = await FirebaseFirestore.instance
+        .collection('hardwares')
+        .doc(hwId)
+        .collection('transactions')
+        .get();
     final seen = <String>{};
     for (final doc in snap.docs) {
       final billNo = doc.data()['bill_no']?.toString().trim();
@@ -78,7 +84,14 @@ class TransactionService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  CollectionReference get _transactions => _db.collection('transactions');
+  /// Returns the transactions subcollection for the currently active hardware, or null if none.
+  CollectionReference? get _transactions {
+    final hwId = HardwareContext.instance.activeHardware?.id;
+    if (hwId == null || hwId.isEmpty) {
+      return null;
+    }
+    return _db.collection('hardwares').doc(hwId).collection('transactions');
+  }
 
   /// Map of userId -> fullName cache to avoid repeated reads.
   final Map<String, String> _userNameCache = {};
@@ -170,15 +183,13 @@ class TransactionService {
     return 'Admin';
   }
 
-  /// Preload all active product names into cache.
+  /// Preload all active product names into cache (from the active hardware's products).
   Future<void> _preloadProductNames() async {
     try {
-      final snap =
-          await _db.collection('products').get();
-      for (final doc in snap.docs) {
-        final name = doc.data()['product_name']?.toString();
-        if (name != null && name.trim().isNotEmpty) {
-          _productNameCache[doc.id] = name.trim();
+      final snap = await ProductService.instance.getAll();
+      for (final p in snap) {
+        if (p.id != null && p.productName.trim().isNotEmpty) {
+          _productNameCache[p.id!] = p.productName.trim();
         }
       }
     } catch (e) {
@@ -200,21 +211,24 @@ class TransactionService {
 
       // Load items subcollection
       try {
-        final itemsSnap =
-            await _transactions.doc(doc.id).collection('items').get();
-        final itemsList = itemsSnap.docs.map((itemDoc) {
-          final itemData = Map<String, dynamic>.from(itemDoc.data());
-          itemData['id'] = itemDoc.id;
-          final pid = itemData['product_id']?.toString();
-          if ((itemData['product_name'] == null ||
-                  itemData['product_name'].toString().trim().isEmpty) &&
-              pid != null &&
-              _productNameCache.containsKey(pid)) {
-            itemData['product_name'] = _productNameCache[pid];
-          }
-          return itemData;
-        }).toList();
-        data['transaction_items'] = itemsList;
+        final ref = _transactions;
+        if (ref != null) {
+          final itemsSnap =
+              await ref.doc(doc.id).collection('items').get();
+          final itemsList = itemsSnap.docs.map((itemDoc) {
+            final itemData = Map<String, dynamic>.from(itemDoc.data());
+            itemData['id'] = itemDoc.id;
+            final pid = itemData['product_id']?.toString();
+            if ((itemData['product_name'] == null ||
+                    itemData['product_name'].toString().trim().isEmpty) &&
+                pid != null &&
+                _productNameCache.containsKey(pid)) {
+              itemData['product_name'] = _productNameCache[pid];
+            }
+            return itemData;
+          }).toList();
+          data['transaction_items'] = itemsList;
+        }
       } catch (e) {
         debugPrint(
             '[TransactionService] Could not load items for ${doc.id}: $e');
@@ -233,22 +247,31 @@ class TransactionService {
 
   /// Fetch all transactions, ordered by most recent.
   Future<List<Transaction>> getAll() async {
-    final snap = await _transactions
-        .orderBy('created_at', descending: true)
-        .get();
-    return _buildTransactionList(snap.docs);
+    final ref = _transactions;
+    if (ref == null) return [];
+    try {
+      final snap = await ref
+          .orderBy('created_at', descending: true)
+          .get();
+      return _buildTransactionList(snap.docs);
+    } catch (e) {
+      debugPrint('[TransactionService] getAll error: $e');
+      rethrow;
+    }
   }
 
   /// Fetch all transactions associated with a specific product ID.
   Future<List<Transaction>> getByProductId(String productId) async {
+    final ref = _transactions;
+    if (ref == null) return [];
     // Find all items docs across transactions that reference this product
-    final allTxnSnap = await _transactions
+    final allTxnSnap = await ref
         .orderBy('created_at')
         .get();
 
     final matchingDocs = <QueryDocumentSnapshot>[];
     for (final txnDoc in allTxnSnap.docs) {
-      final itemsSnap = await _transactions
+      final itemsSnap = await ref
           .doc(txnDoc.id)
           .collection('items')
           .where('product_id', isEqualTo: productId)
@@ -263,7 +286,9 @@ class TransactionService {
 
   /// Fetch a single transaction with its items.
   Future<Transaction> getById(String id) async {
-    final doc = await _transactions.doc(id).get();
+    final ref = _transactions;
+    if (ref == null) throw StateError('No active workspace selected.');
+    final doc = await ref.doc(id).get();
     if (!doc.exists) throw Exception('Transaction $id not found');
 
     await _preloadProductNames();
@@ -273,7 +298,7 @@ class TransactionService {
 
     try {
       final itemsSnap =
-          await _transactions.doc(id).collection('items').get();
+          await ref.doc(id).collection('items').get();
       final itemsList = itemsSnap.docs.map((itemDoc) {
         final itemData = Map<String, dynamic>.from(itemDoc.data());
         itemData['id'] = itemDoc.id;
@@ -302,7 +327,9 @@ class TransactionService {
 
   /// Fetch the most recent transactions (for the dashboard).
   Future<List<Transaction>> getRecent({int limit = 5}) async {
-    final snap = await _transactions
+    final ref = _transactions;
+    if (ref == null) return [];
+    final snap = await ref
         .orderBy('created_at', descending: true)
         .limit(limit)
         .get();
@@ -445,14 +472,17 @@ class TransactionService {
       if (userId != null && userId.isNotEmpty) 'created_by': userId,
     };
 
-    final txnRef = await _transactions.add(txnData);
+    final ref = _transactions;
+    if (ref == null) throw StateError('No active workspace selected.');
+
+    final txnRef = await ref.add(txnData);
     final txnId = txnRef.id;
 
     // Insert items as a subcollection
     if (items.isNotEmpty) {
       final batch = _db.batch();
       for (final item in items) {
-        final itemRef = _transactions.doc(txnId).collection('items').doc();
+        final itemRef = ref.doc(txnId).collection('items').doc();
         batch.set(itemRef, {
           'product_id': item.productId,
           'product_name': item.productName,
@@ -509,6 +539,9 @@ class TransactionService {
     String? issuedTo,
     DateTime? createdAt,
   }) async {
+    final ref = _transactions;
+    if (ref == null) throw StateError('No active workspace selected.');
+
     // 1. Fetch original transaction to calculate stock delta.
     Transaction? oldTxn;
     try {
@@ -564,11 +597,11 @@ class TransactionService {
       'remarks': finalRemarks,
       if (createdAt != null) 'created_at': Timestamp.fromDate(createdAt),
     };
-    await _transactions.doc(transactionId).update(updatePayload);
+    await ref.doc(transactionId).update(updatePayload);
 
     // Replace items: delete existing subcollection docs, insert new ones.
     try {
-      final existingItems = await _transactions
+      final existingItems = await ref
           .doc(transactionId)
           .collection('items')
           .get();
@@ -578,7 +611,7 @@ class TransactionService {
       }
       for (final item in items) {
         final newRef =
-            _transactions.doc(transactionId).collection('items').doc();
+            ref.doc(transactionId).collection('items').doc();
         batch.set(newRef, {
           'product_id': item.productId,
           'product_name': item.productName,
@@ -599,6 +632,9 @@ class TransactionService {
 
   /// Delete a transaction and its items, reversing product stock.
   Future<void> deleteTransaction(String transactionId) async {
+    final ref = _transactions;
+    if (ref == null) return;
+
     // 1. Fetch original transaction to revert stock.
     Transaction? txn;
     try {
@@ -628,7 +664,7 @@ class TransactionService {
 
     // 2. Delete items subcollection then the transaction document.
     try {
-      final itemsSnap = await _transactions
+      final itemsSnap = await ref
           .doc(transactionId)
           .collection('items')
           .get();
@@ -636,7 +672,7 @@ class TransactionService {
       for (final doc in itemsSnap.docs) {
         batch.delete(doc.reference);
       }
-      batch.delete(_transactions.doc(transactionId));
+      batch.delete(ref.doc(transactionId));
       await batch.commit();
     } catch (e) {
       debugPrint(

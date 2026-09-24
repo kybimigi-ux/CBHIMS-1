@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/product.dart';
+import 'hardware_context.dart';
 
 /// Thrown when an outbound (or other decreasing) quantity change would
 /// take a product's stock below zero.
@@ -14,17 +15,32 @@ class InsufficientStockException implements Exception {
 }
 
 /// Service for all product-related Firestore operations.
+/// Products are stored per-hardware workspace under:
+///   hardwares/{hardwareId}/products/{productId}
 class ProductService {
   ProductService._();
   static final ProductService instance = ProductService._();
 
   final FirebaseFirestore _db = FirebaseFirestore.instance;
-  CollectionReference get _products => _db.collection('products');
+
+  /// Returns the products subcollection for the currently active hardware, or null if none.
+  CollectionReference? get _products {
+    final hwId = HardwareContext.instance.activeHardware?.id;
+    if (hwId == null || hwId.isEmpty) {
+      return null;
+    }
+    return _db
+        .collection('hardwares')
+        .doc(hwId)
+        .collection('products');
+  }
 
   /// Fetch all active products, ordered by name.
   Future<List<Product>> getAll() async {
+    final ref = _products;
+    if (ref == null) return [];
     try {
-      final snap = await _products.get();
+      final snap = await ref.get();
       final products = snap.docs
           .map((doc) => Product.fromFirestore(doc))
           .where((p) => p.isActive)
@@ -40,7 +56,9 @@ class ProductService {
 
   /// Fetch a single product by its Firestore document ID.
   Future<Product?> getById(String id) async {
-    final doc = await _products.doc(id).get();
+    final ref = _products;
+    if (ref == null) return null;
+    final doc = await ref.doc(id).get();
     if (!doc.exists) return null;
     return Product.fromFirestore(doc);
   }
@@ -56,19 +74,23 @@ class ProductService {
 
   /// Insert a new product into Firestore.
   Future<Product> add(Product product) async {
+    final ref = _products;
+    if (ref == null) throw StateError('No active workspace selected.');
     final data = product.toInsertJson();
-    final ref = await _products.add(data);
-    final doc = await ref.get();
+    final docRef = await ref.add(data);
+    final doc = await docRef.get();
     return Product.fromFirestore(doc);
   }
 
   /// Update an existing product by document ID.
   Future<void> update(String id, Map<String, dynamic> data) async {
+    final ref = _products;
+    if (ref == null) throw StateError('No active workspace selected.');
     final cleanData = Map<String, dynamic>.from(data)
       ..remove('id')
       ..remove('created_at');
     try {
-      await _products.doc(id).update(cleanData);
+      await ref.doc(id).update(cleanData);
     } catch (e) {
       debugPrint('[ProductService] update failed for $id: $e');
       rethrow;
@@ -77,12 +99,16 @@ class ProductService {
 
   /// Soft-delete a product (set is_active = false).
   Future<void> delete(String id) async {
-    await _products.doc(id).update({'is_active': false});
+    final ref = _products;
+    if (ref == null) return;
+    await ref.doc(id).update({'is_active': false});
   }
 
   /// Fetch current stock for a single product.
   Future<double> getCurrentQuantity(String id) async {
-    final doc = await _products.doc(id).get();
+    final ref = _products;
+    if (ref == null) return 0.0;
+    final doc = await ref.doc(id).get();
     final q = (doc.data() as Map<String, dynamic>?)?['quantity'];
     if (q is num) return q.toDouble();
     if (q is String) return double.tryParse(q.replaceAll(',', '.')) ?? 0.0;
@@ -92,7 +118,9 @@ class ProductService {
   /// Atomically adjusts product quantity using a Firestore Transaction.
   /// Throws [InsufficientStockException] if the result would go below zero.
   Future<void> updateQuantity(String id, double quantityChange) async {
-    final docRef = _products.doc(id);
+    final ref = _products;
+    if (ref == null) throw StateError('No active workspace selected.');
+    final docRef = ref.doc(id);
     await _db.runTransaction((txn) async {
       final snapshot = await txn.get(docRef);
       final data = snapshot.data() as Map<String, dynamic>?;
@@ -110,9 +138,11 @@ class ProductService {
 
   /// Get total active product count.
   Future<int> getTotalCount() async {
+    final ref = _products;
+    if (ref == null) return 0;
     try {
       final snap =
-          await _products.where('is_active', isEqualTo: true).count().get();
+          await ref.where('is_active', isEqualTo: true).count().get();
       return snap.count ?? 0;
     } catch (_) {
       try {
@@ -126,8 +156,10 @@ class ProductService {
 
   /// Get count of low-stock products (quantity <= 10 and > 0).
   Future<int> getLowStockCount() async {
+    final ref = _products;
+    if (ref == null) return 0;
     try {
-      final snap = await _products
+      final snap = await ref
           .where('is_active', isEqualTo: true)
           .where('quantity', isLessThanOrEqualTo: 10)
           .where('quantity', isGreaterThan: 0)

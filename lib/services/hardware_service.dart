@@ -1,4 +1,4 @@
-﻿import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import '../models/hardware.dart';
 import 'auth_service.dart';
@@ -150,6 +150,17 @@ class HardwareService {
     await _col.doc(hardwareId).update({
       'memberIds': FieldValue.arrayRemove([userId]),
       'members.$userId': FieldValue.delete(),
+    });
+  }
+
+  /// Update permissions for a specific member in a hardware workspace.
+  Future<void> updateMemberPermissions(
+    String hardwareId,
+    String userId,
+    MemberPermissions permissions,
+  ) async {
+    await _col.doc(hardwareId).update({
+      'members.$userId.permissions': permissions.toMap(),
     });
   }
 

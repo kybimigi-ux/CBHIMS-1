@@ -1,4 +1,56 @@
-﻿import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+/// Permissions assigned to a member within a hardware workspace.
+class MemberPermissions {
+  final bool canAddProducts;
+  final bool canEditProducts;
+  final bool canRemoveProducts;
+  final bool canAddTransactions;
+  final bool canCancelTransactions;
+
+  const MemberPermissions({
+    this.canAddProducts = true,
+    this.canEditProducts = true,
+    this.canRemoveProducts = false,
+    this.canAddTransactions = true,
+    this.canCancelTransactions = false,
+  });
+
+  factory MemberPermissions.fromMap(Map<String, dynamic>? data) {
+    if (data == null) return const MemberPermissions();
+    return MemberPermissions(
+      canAddProducts: data['canAddProducts'] as bool? ?? data['allowAddProducts'] as bool? ?? true,
+      canEditProducts: data['canEditProducts'] as bool? ?? data['allowEditProducts'] as bool? ?? true,
+      canRemoveProducts: data['canRemoveProducts'] as bool? ?? data['allowRemoveProducts'] as bool? ?? false,
+      canAddTransactions: data['canAddTransactions'] as bool? ?? data['allowAddTransactions'] as bool? ?? true,
+      canCancelTransactions: data['canCancelTransactions'] as bool? ?? data['allowCancelTransactions'] as bool? ?? false,
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+        'canAddProducts': canAddProducts,
+        'canEditProducts': canEditProducts,
+        'canRemoveProducts': canRemoveProducts,
+        'canAddTransactions': canAddTransactions,
+        'canCancelTransactions': canCancelTransactions,
+      };
+
+  MemberPermissions copyWith({
+    bool? canAddProducts,
+    bool? canEditProducts,
+    bool? canRemoveProducts,
+    bool? canAddTransactions,
+    bool? canCancelTransactions,
+  }) {
+    return MemberPermissions(
+      canAddProducts: canAddProducts ?? this.canAddProducts,
+      canEditProducts: canEditProducts ?? this.canEditProducts,
+      canRemoveProducts: canRemoveProducts ?? this.canRemoveProducts,
+      canAddTransactions: canAddTransactions ?? this.canAddTransactions,
+      canCancelTransactions: canCancelTransactions ?? this.canCancelTransactions,
+    );
+  }
+}
 
 /// A member of a hardware workspace.
 class HardwareMember {
@@ -7,6 +59,7 @@ class HardwareMember {
   final String fullName;
   final String role; // 'admin' | 'staff'
   final DateTime? joinedAt;
+  final MemberPermissions permissions;
 
   const HardwareMember({
     required this.userId,
@@ -14,6 +67,7 @@ class HardwareMember {
     required this.fullName,
     required this.role,
     this.joinedAt,
+    this.permissions = const MemberPermissions(),
   });
 
   factory HardwareMember.fromMap(String uid, Map<String, dynamic> data) {
@@ -23,6 +77,9 @@ class HardwareMember {
       fullName: data['fullName'] as String? ?? data['email'] as String? ?? 'User',
       role: data['role'] as String? ?? 'staff',
       joinedAt: _parseDate(data['joinedAt']),
+      permissions: MemberPermissions.fromMap(
+        data['permissions'] as Map<String, dynamic>?,
+      ),
     );
   }
 
@@ -31,6 +88,7 @@ class HardwareMember {
         'fullName': fullName,
         'role': role,
         'joinedAt': FieldValue.serverTimestamp(),
+        'permissions': permissions.toMap(),
       };
 
   static DateTime? _parseDate(dynamic val) {
@@ -53,6 +111,12 @@ class HardwareMember {
   }
 
   bool get isAdmin => role.toLowerCase() == 'admin';
+
+  bool get canAddProducts => isAdmin || permissions.canAddProducts;
+  bool get canEditProducts => isAdmin || permissions.canEditProducts;
+  bool get canRemoveProducts => isAdmin || permissions.canRemoveProducts;
+  bool get canAddTransactions => isAdmin || permissions.canAddTransactions;
+  bool get canCancelTransactions => isAdmin || permissions.canCancelTransactions;
 }
 
 /// A hardware workspace — the top-level store context that groups users together.
