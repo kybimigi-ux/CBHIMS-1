@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'auth_screen/login_screen.dart';
-import 'auth_screen/pending_approval_screen.dart';
+import 'auth_screen/auth_portal_screen.dart';
 import 'hardware_lobby_screen.dart';
 import '../services/auth_service.dart';
 import '../services/hardware_context.dart';
+import '../services/navigation_service.dart';
 
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
@@ -32,13 +32,6 @@ class _AuthGateState extends State<AuthGate> {
     }
   }
 
-  Widget _resolveHome() {
-    if (AuthService.instance.isPending) {
-      return const PendingApprovalScreen();
-    }
-    return const HardwareLobbyScreen();
-  }
-
   @override
   Widget build(BuildContext context) {
     if (_initializing) {
@@ -59,9 +52,12 @@ class _AuthGateState extends State<AuthGate> {
         final user = snapshot.data;
 
         if (user == null) {
-          // Clear active hardware on logout
+          // Clear active hardware on logout and ensure pushed routes are dismissed
           HardwareContext.instance.clearActiveHardware();
-          return const LoginScreen();
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            NavigationService.popToRoot();
+          });
+          return const AuthPortalScreen();
         }
 
         return ListenableBuilder(
@@ -73,7 +69,8 @@ class _AuthGateState extends State<AuthGate> {
                 body: Center(child: CircularProgressIndicator()),
               );
             }
-            return _resolveHome();
+            // Always go to the hardware lobby — no pending approval screen.
+            return const HardwareLobbyScreen();
           },
         );
       },

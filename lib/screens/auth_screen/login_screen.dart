@@ -3,12 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../theme/app_theme.dart';
 import '../../services/auth_service.dart';
+import '../../services/navigation_service.dart';
 import 'signup_screen.dart';
 
 /// A premium login screen with the STOKADO branding, glassmorphism card,
 /// and subtle gradient background.
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  final String initialRole;
+  const LoginScreen({super.key, this.initialRole = 'admin'});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -23,6 +25,7 @@ class _LoginScreenState extends State<LoginScreen>
   bool _obscurePassword = true;
   bool _demoLoading = false;
   String? _demoRole;
+  late String _selectedRole;
 
   late final AnimationController _fadeController;
   late final Animation<double> _fadeAnim;
@@ -31,6 +34,7 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   void initState() {
     super.initState();
+    _selectedRole = widget.initialRole;
     _fadeController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 800),
@@ -60,8 +64,8 @@ class _LoginScreenState extends State<LoginScreen>
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
-      // AuthGate handles navigation — including routing to
-      // PendingApprovalScreen if the role is still null.
+      // Pop back to root so AuthGate can display HardwareLobbyScreen.
+      NavigationService.popToRoot();
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
       debugPrint('[SignIn] FirebaseAuthException: ${e.code} - ${e.message}');
@@ -130,6 +134,19 @@ class _LoginScreenState extends State<LoginScreen>
     setState(() { _demoLoading = true; _demoRole = role; });
     try {
       await AuthService.instance.signInDemo(role: role);
+      // Pop back to root so AuthGate can display HardwareLobbyScreen.
+      NavigationService.popToRoot();
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+      final msg = e.message ?? 'Demo sign-in failed. Please try again.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          backgroundColor: AppColors.danger,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -243,17 +260,143 @@ class _LoginScreenState extends State<LoginScreen>
                           ),
                           const SizedBox(height: 36),
 
+                          // ── Role Segmented Selector ──
+                          Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: AppColors.background,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: AppColors.border),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: GestureDetector(
+                                    onTap: () => setState(() => _selectedRole = 'admin'),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(vertical: 9),
+                                      decoration: BoxDecoration(
+                                        color: _selectedRole == 'admin'
+                                            ? AppColors.surface
+                                            : Colors.transparent,
+                                        borderRadius: BorderRadius.circular(9),
+                                        boxShadow: _selectedRole == 'admin'
+                                            ? [
+                                                BoxShadow(
+                                                  color: Colors.black.withValues(alpha: 0.05),
+                                                  blurRadius: 4,
+                                                  offset: const Offset(0, 1),
+                                                ),
+                                              ]
+                                            : null,
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(Icons.storefront_rounded,
+                                              size: 16,
+                                              color: _selectedRole == 'admin'
+                                                  ? AppColors.primary
+                                                  : AppColors.textMuted),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            'Store Owner',
+                                            style: TextStyle(
+                                              fontSize: 12.5,
+                                              fontWeight: _selectedRole == 'admin'
+                                                  ? FontWeight.w700
+                                                  : FontWeight.w500,
+                                              color: _selectedRole == 'admin'
+                                                  ? AppColors.primary
+                                                  : AppColors.textSecondary,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                Expanded(
+                                  child: GestureDetector(
+                                    onTap: () => setState(() => _selectedRole = 'staff'),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(vertical: 9),
+                                      decoration: BoxDecoration(
+                                        color: _selectedRole == 'staff'
+                                            ? AppColors.surface
+                                            : Colors.transparent,
+                                        borderRadius: BorderRadius.circular(9),
+                                        boxShadow: _selectedRole == 'staff'
+                                            ? [
+                                                BoxShadow(
+                                                  color: Colors.black.withValues(alpha: 0.05),
+                                                  blurRadius: 4,
+                                                  offset: const Offset(0, 1),
+                                                ),
+                                              ]
+                                            : null,
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(Icons.badge_outlined,
+                                              size: 16,
+                                              color: _selectedRole == 'staff'
+                                                  ? const Color(0xFF0D9488)
+                                                  : AppColors.textMuted),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            'Staff Member',
+                                            style: TextStyle(
+                                              fontSize: 12.5,
+                                              fontWeight: _selectedRole == 'staff'
+                                                  ? FontWeight.w700
+                                                  : FontWeight.w500,
+                                              color: _selectedRole == 'staff'
+                                                  ? const Color(0xFF0D9488)
+                                                  : AppColors.textSecondary,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+
                           // ── Section label ──
                           Align(
                             alignment: Alignment.centerLeft,
-                            child: Text(
-                              'Sign in to your account',
-                              style: AppTextStyles.bodyLarge.copyWith(
-                                color: AppColors.textPrimary,
-                              ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  _selectedRole == 'admin'
+                                      ? 'Sign in as Store Owner'
+                                      : 'Sign in as Staff Member',
+                                  style: AppTextStyles.bodyLarge.copyWith(
+                                    color: AppColors.textPrimary,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                if (Navigator.of(context).canPop())
+                                  GestureDetector(
+                                    onTap: () => Navigator.of(context).pop(),
+                                    child: Text(
+                                      'Change Role',
+                                      style: AppTextStyles.caption.copyWith(
+                                        color: AppColors.primary,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                              ],
                             ),
                           ),
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 18),
 
                           // ── Email ──
                           _buildTextField(
@@ -357,7 +500,7 @@ class _LoginScreenState extends State<LoginScreen>
                                 onTap: () {
                                   Navigator.of(context).push(
                                     MaterialPageRoute(
-                                      builder: (_) => const SignupScreen(),
+                                      builder: (_) => SignupScreen(initialRole: _selectedRole),
                                     ),
                                   );
                                 },

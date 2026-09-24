@@ -3,6 +3,8 @@ import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'hardware_context.dart';
+import 'navigation_service.dart';
 
 class PendingApprovalException implements Exception {
   @override
@@ -251,10 +253,12 @@ class AuthService extends ChangeNotifier {
 
   /// Create a new account with email, password and a display name.
   /// Also inserts a document into the `users` Firestore collection.
+  /// New users get 'staff' role by default (or 'admin' if they're the first user).
   Future<UserCredential> signUp({
     required String email,
     required String password,
     required String fullName,
+    String role = 'staff',
   }) async {
     _resetRole();
 
@@ -272,18 +276,9 @@ class AuthService extends ChangeNotifier {
         debugPrint('[AuthService] Could not update display name: $e');
       }
 
-      // Check if this is the first user in the database.
-      // If so, automatically make them an Admin!
-      String? assignedRole;
-      try {
-        final existingUsers = await _db.collection('users').limit(1).get();
-        if (existingUsers.docs.isEmpty) {
-          assignedRole = 'admin';
-          debugPrint(
-              '[AuthService] First user registered -> automatically assigning Admin role.');
-        }
-      } catch (e) {
-        debugPrint('[AuthService] Could not check existing users count: $e');
+      String assignedRole = role.toLowerCase().trim();
+      if (assignedRole.isEmpty) {
+        assignedRole = 'staff';
       }
 
       // Insert user profile in Firestore
@@ -291,34 +286,27 @@ class AuthService extends ChangeNotifier {
         await _db.collection('users').doc(user.uid).set({
           'full_name': fullName,
           'email': email,
-          'role': assignedRole, // 'admin' for first user, null for subsequent
+          'role': assignedRole,
           'created_at': FieldValue.serverTimestamp(),
         });
-        if (assignedRole != null) {
-          _cachedRole = 'Admin';
-          try {
-            final prefs = await SharedPreferences.getInstance();
-            await prefs.setInt(
-                _kSessionLoginTime, DateTime.now().millisecondsSinceEpoch);
-            await prefs.setString(_kCachedRole, 'Admin');
-          } catch (_) {}
-        }
+        final formatted = assignedRole[0].toUpperCase() + assignedRole.substring(1).toLowerCase();
+        _cachedRole = formatted;
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setInt(
+              _kSessionLoginTime, DateTime.now().millisecondsSinceEpoch);
+          await prefs.setString(_kCachedRole, formatted);
+        } catch (_) {}
       } catch (e) {
         debugPrint('[AuthService] Failed to create user document: $e');
       }
 
-      // If subsequent user (pending approval), sign out so they return to login.
-      // If first user (Admin), keep them signed in!
-      if (assignedRole == null) {
-        try {
-          await _auth.signOut();
-        } catch (_) {}
-        _resetRole();
-      }
+      notifyListeners();
     }
 
     return credential;
   }
+
 
   /// Sign in with email & password.
   Future<UserCredential> signIn({
@@ -345,6 +333,7 @@ class AuthService extends ChangeNotifier {
 
   /// End the current session.
   Future<void> signOut() async {
+    HardwareContext.instance.clearActiveHardware();
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_kSessionLoginTime);
@@ -356,6 +345,10 @@ class AuthService extends ChangeNotifier {
       debugPrint('[AuthService] signOut error: $e');
     }
     _resetRole();
+
+    // Pop all pushed routes back to the root AuthGate, ensuring any pushed
+    // screens (like MainLayoutScreen, dialogs, drawers) are fully dismissed.
+    NavigationService.popToRoot();
   }
 
   // ---------------------------------------------------------------------------
@@ -374,11 +367,29 @@ class AuthService extends ChangeNotifier {
     try {
       await signIn(email: email, password: password);
     } on FirebaseAuthException catch (e) {
+      // Firebase newer SDK returns 'invalid-credential' for both "no user" and
+      // "wrong password". We treat it as "account may not exist" and try to
+      // create it. If it already exists, we catch email-already-in-use and
+      // re-attempt sign-in (handles edge cases like stale passwords).
       if (e.code == 'user-not-found' ||
           e.code == 'invalid-credential' ||
-          e.code == 'INVALID_LOGIN_CREDENTIALS') {
-        // Account doesn't exist yet — create it
-        await _createDemoAccount(email: email, password: password, role: role);
+          e.code == 'INVALID_LOGIN_CREDENTIALS' ||
+          e.code == 'wrong-password') {
+        try {
+          await _createDemoAccount(email: email, password: password, role: role);
+        } on FirebaseAuthException catch (createError) {
+          if (createError.code == 'email-already-in-use') {
+            // Account exists — force delete and recreate isn't an option,
+            // so we surface a friendly error instead.
+            throw FirebaseAuthException(
+              code: 'demo-sign-in-failed',
+              message:
+                  'Demo account exists but could not be signed into. '
+                  'Please try again or contact support.',
+            );
+          }
+          rethrow;
+        }
       } else {
         rethrow;
       }

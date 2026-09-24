@@ -7,6 +7,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 
 import 'services/auth_service.dart';
 import 'services/connectivity_service.dart';
+import 'services/navigation_service.dart';
 import 'services/offline_queue_service.dart';
 import 'services/settings_service.dart';
 import 'services/sync_service.dart';
@@ -74,6 +75,7 @@ class InventoryApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: NavigationService.navigatorKey,
       title: 'STOKADO — Inventory Management',
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(),
