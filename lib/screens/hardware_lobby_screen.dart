@@ -61,9 +61,14 @@ class _HardwareLobbyScreenState extends State<HardwareLobbyScreen>
 
   void _openHardware(Hardware hw) {
     HardwareContext.instance.setActiveHardware(hw);
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const MainLayoutScreen()),
-    );
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const MainLayoutScreen()))
+        .then((_) {
+      // Reload the list whenever we return from inside a workspace
+      // (handles delete, leave-workspace, etc. without the user needing
+      // to manually refresh).
+      if (mounted) _loadHardwares();
+    });
   }
 
   Future<void> _showCreateDialog() async {
@@ -294,8 +299,46 @@ class _HardwareLobbyScreenState extends State<HardwareLobbyScreen>
                 icon:
                     const Icon(Icons.logout_rounded, color: Colors.white, size: 20),
                 onPressed: () async {
-                  HardwareContext.instance.clearActiveHardware();
-                  await AuthService.instance.signOut();
+                  final confirm = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16)),
+                      title: Row(
+                        children: [
+                          const Icon(Icons.logout_rounded,
+                              color: AppColors.danger, size: 22),
+                          const SizedBox(width: 10),
+                          Text('Log Out', style: AppTextStyles.h3),
+                        ],
+                      ),
+                      content: Text(
+                        'Are you sure you want to log out? You can switch between Store Owner and Staff upon returning to the portal.',
+                        style: AppTextStyles.body,
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.of(ctx).pop(false),
+                          child: Text('Cancel',
+                              style: AppTextStyles.bodyMedium
+                                  .copyWith(color: AppColors.textSecondary)),
+                        ),
+                        ElevatedButton(
+                          onPressed: () => Navigator.of(ctx).pop(true),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.danger,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8)),
+                          ),
+                          child: const Text('Log Out'),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (confirm == true) {
+                    await AuthService.instance.signOut();
+                  }
                 },
               ),
               const SizedBox(width: 4),
