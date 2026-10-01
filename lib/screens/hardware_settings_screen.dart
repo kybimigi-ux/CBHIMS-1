@@ -56,7 +56,7 @@ class _HardwareSettingsScreenState extends State<HardwareSettingsScreen> {
   Future<void> _saveInfo() async {
     final name = _nameCtrl.text.trim();
     if (name.isEmpty) {
-      NotificationBanner.show(context, 'Hardware name cannot be empty.',
+      NotificationBanner.show(context, 'Store name cannot be empty.',
           tone: NotificationTone.warning);
       return;
     }
@@ -66,7 +66,7 @@ class _HardwareSettingsScreenState extends State<HardwareSettingsScreen> {
           name: name, description: _descCtrl.text.trim());
       await _reload();
       if (mounted) {
-        NotificationBanner.show(context, 'Workspace updated.',
+        NotificationBanner.show(context, 'Store updated.',
             tone: NotificationTone.success);
       }
     } catch (e) {
@@ -232,7 +232,7 @@ class _HardwareSettingsScreenState extends State<HardwareSettingsScreen> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Hardware Settings', style: AppTextStyles.h3),
+            Text('Store Settings', style: AppTextStyles.h3),
             Text(_hw.name,
                 style: AppTextStyles.caption
                     .copyWith(color: AppColors.primary, fontSize: 12)),

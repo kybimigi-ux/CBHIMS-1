@@ -130,7 +130,7 @@ class _SwitchWorkspaceDialogState extends State<SwitchWorkspaceDialog> {
                     color: AppColors.primary, size: 20),
               ),
               const SizedBox(width: 12),
-              Text('Create Hardware', style: AppTextStyles.h3),
+              Text('Create Store', style: AppTextStyles.h3),
             ],
           ),
           content: SizedBox(
@@ -290,7 +290,7 @@ class _SwitchWorkspaceDialogState extends State<SwitchWorkspaceDialog> {
                         Text('Switch Workspace', style: AppTextStyles.h3),
                         const SizedBox(height: 2),
                         Text(
-                          'Jump directly to another hardware branch',
+                          'Jump directly to another store branch',
                           style: AppTextStyles.caption.copyWith(color: AppColors.textMuted),
                         ),
                       ],
@@ -596,7 +596,7 @@ class _SwitchWorkspaceDialogState extends State<SwitchWorkspaceDialog> {
                       child: ElevatedButton.icon(
                         onPressed: _showCreateInlineDialog,
                         icon: const Icon(Icons.add_rounded, size: 17),
-                        label: const Text('New Hardware'),
+                        label: const Text('New Store'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.primary,
                           foregroundColor: Colors.white,

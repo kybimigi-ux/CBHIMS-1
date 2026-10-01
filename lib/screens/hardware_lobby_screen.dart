@@ -100,7 +100,7 @@ class _HardwareLobbyScreenState extends State<HardwareLobbyScreen>
                     color: AppColors.primary, size: 20),
               ),
               const SizedBox(width: 12),
-              Text('Create Hardware', style: AppTextStyles.h3),
+              Text('Create Store', style: AppTextStyles.h3),
             ],
           ),
           content: Form(
@@ -129,7 +129,7 @@ class _HardwareLobbyScreenState extends State<HardwareLobbyScreen>
                   style: AppTextStyles.body,
                   maxLines: 2,
                   decoration: _inputDec(
-                      hint: 'Short description of this hardware store', icon: Icons.notes_rounded),
+                      hint: 'Short description of this store', icon: Icons.notes_rounded),
                 ),
               ],
             ),
@@ -266,7 +266,7 @@ class _HardwareLobbyScreenState extends State<HardwareLobbyScreen>
                         const SizedBox(height: 12),
                         Text(
                           isAdmin
-                              ? 'Your Hardware Workspaces'
+                              ? 'Your Store Workspaces'
                               : 'Your Assigned Workspaces',
                           style: AppTextStyles.h2
                               .copyWith(color: Colors.white, fontSize: compact ? 20 : 24),
@@ -388,7 +388,7 @@ class _HardwareLobbyScreenState extends State<HardwareLobbyScreen>
               foregroundColor: Colors.white,
               elevation: 2,
               icon: const Icon(Icons.add_rounded),
-              label: Text('New Hardware', style: AppTextStyles.bodyMedium.copyWith(color: Colors.white)),
+              label: Text('New Store', style: AppTextStyles.bodyMedium.copyWith(color: Colors.white)),
             )
           : null,
     );
@@ -411,13 +411,13 @@ class _HardwareLobbyScreenState extends State<HardwareLobbyScreen>
           ),
           const SizedBox(height: 20),
           Text(
-            isAdmin ? 'No Hardware Yet' : 'No Workspaces Found',
+            isAdmin ? 'No Stores Yet' : 'No Workspaces Found',
             style: AppTextStyles.h3,
           ),
           const SizedBox(height: 8),
           Text(
             isAdmin
-                ? 'Create your first hardware workspace\nto start managing inventory.'
+                ? 'Create your first store workspace\nto start managing inventory.'
                 : 'You haven\'t been invited to any workspace.\nContact your admin with your email:',
             style: AppTextStyles.body
                 .copyWith(color: AppColors.textSecondary),
@@ -444,7 +444,7 @@ class _HardwareLobbyScreenState extends State<HardwareLobbyScreen>
             ElevatedButton.icon(
               onPressed: _showCreateDialog,
               icon: const Icon(Icons.add_rounded, size: 18),
-              label: const Text('Create Hardware'),
+              label: const Text('Create Store'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
